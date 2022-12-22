@@ -492,8 +492,8 @@ def fn_tenant_safety( damage, building_model, functionality_options,
         unit={}
         for key in list(tenant_units.keys()):
             unit[key] = tenant_units[key][tu]
-        repair_complete_day_w_tmp = damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'] # day each component (and DS) is reparied of this TU
-    
+        repair_complete_day_w_tmp = tuple(map(tuple,(damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp']))) # day each component (and DS) is reparied of this TU
+        #FZ# Made tuple to bypass the issue of mutable numpy array
         '''#Exterior Enclosure 
            Calculated the affected perimeter area of exterior components
            (assuming all exterior components have either lf or sf units)'''
@@ -509,6 +509,7 @@ def fn_tenant_safety( damage, building_model, functionality_options,
            Find when enough repairs are complete such that interior damage no
            longer affects tenant safety'''
         comps_day_repaired = repair_complete_day_w_tmp # define as initial repair day considering tmp repairs
+        comps_day_repaired = np.array(comps_day_repaired)
         ext_repair_day = np.zeros(num_reals)
         all_comps_day_repaired = np.zeros([num_reals,num_comps])
         num_repair_time_increments = np.sum(damage['fnc_filters']['exterior_safety_all']) # possible unique number of loop increments
@@ -552,11 +553,12 @@ def fn_tenant_safety( damage, building_model, functionality_options,
         
         # Checking damage that affects components in story below
         repair_complete_day_w_tmp_w_instabilities = repair_complete_day_w_tmp
+        repair_complete_day_w_tmp_w_instabilities = np.array(repair_complete_day_w_tmp_w_instabilities) #FZ# coverted to array from tuple
         if tu > 0: #FZ# changes to zero to account for python indexing starting from 0.
             area_affected_below = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu-1] * damage['tenant_units'][tu-1]['qnt_damaged']
             area_affected_all_bay_comps[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(area_affected_below[:,damage['fnc_filters']['vert_instabilities']], area_affected_all_bay_comps[:,damage['fnc_filters']['vert_instabilities']])
             repair_time_below = damage['tenant_units'][tu-1]['recovery']['repair_complete_day_w_tmp']
-            repair_complete_day_w_tmp_w_instabilities[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(repair_time_below[:,damage['fnc_filters']['vert_instabilities']],repair_complete_day_w_tmp[:,damage['fnc_filters']['vert_instabilities']])
+            repair_complete_day_w_tmp_w_instabilities[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(repair_time_below[:,damage['fnc_filters']['vert_instabilities']],np.array(repair_complete_day_w_tmp)[:,damage['fnc_filters']['vert_instabilities']])
         
     
         # construct a matrix of affected areas from the various damaged component types
@@ -1078,14 +1080,16 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         for key in list(tenant_units.keys()):
             unit[key] = tenant_units[key][tu]        
         
-        repair_complete_day = damage['tenant_units'][tu]['recovery']['repair_complete_day']
-        repair_complete_day_w_tmp = damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp']
+        repair_complete_day = tuple(map(tuple,damage['tenant_units'][tu]['recovery']['repair_complete_day'])) #FZ# Made tuple to bypass the issue of mutable numpy array
+        repair_complete_day_w_tmp = tuple(map(tuple, damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'])) #FZ# Made tuple to bypass the issue of mutable numpy array
         
         ## Elevators
         if unit['is_elevator_required'] == 1:
-            comps_day_repaired = system_operation_day['comp']['elev_day_repaired']
+            comps_day_repaired= tuple(map(tuple,system_operation_day['comp']['elev_day_repaired'])) #FZ# Made tuple to bypass the issue of mutable numpy array
+            comps_day_repaired = np.array(comps_day_repaired)
             comps_day_repaired[comps_day_repaired == 0] = np.nan
-            comps_quant_damaged = system_operation_day['comp']['elev_quant_damaged']
+            comps_quant_damaged = tuple(map(tuple,system_operation_day['comp']['elev_quant_damaged'])) #FZ# Made tuple to bypass the issue of mutable numpy array
+            comps_quant_damaged = np.array(comps_quant_damaged)
             elev_function_recovery_day = np.zeros(num_reals)
             elev_comps_day_fnc = np.zeros([num_reals,num_comps])
             num_repair_time_increments = sum(damage['fnc_filters']['elevators']) # possible unique number of loop increments
@@ -1133,6 +1137,8 @@ def fn_tenant_function( damage, building_model, system_operation_day,
                 comps_quant_damaged[fixed_comps_filt] = 0
             
             power_supply_recovery_day = np.fmax(np.fmax(system_operation_day['building']['elevator_mcs'], system_operation_day['building']['electrical_main']), utilities['electrical'])
+            
+            # Here was the problem in use of fmax. Changed to max
             recovery_day['elevators'][:,tu] = np.fmax(elev_function_recovery_day, power_supply_recovery_day) # electrical system and utility
             power_supply_recovery_day_comp = np.fmax(system_operation_day['comp']['elevator_mcs'], system_operation_day['comp']['electrical_main'])
             comp_breakdowns['elevators'][:,:,tu] = np.fmax(elev_comps_day_fnc, power_supply_recovery_day_comp)
@@ -1147,7 +1153,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         comp_affected_area[:,damage['fnc_filters']['exterior_seal_lf']] = area_affected_lf_all_comps[:,damage['fnc_filters']['exterior_seal_lf']]
         comp_affected_area[:,damage['fnc_filters']['exterior_seal_sf']] = area_affected_sf_all_comps[:,damage['fnc_filters']['exterior_seal_sf']]
         
-        comps_day_repaired = repair_complete_day
+        comps_day_repaired = np.array(repair_complete_day)
         ext_function_recovery_day = np.zeros(num_reals)
         all_comps_day_ext = np.zeros([num_reals,num_comps])
         num_repair_time_increments = sum(damage['fnc_filters']['exterior_seal_all']) # possible unique number of loop increments
@@ -1185,7 +1191,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
             num_comp_damaged = damage['fnc_filters']['roof_structure'] * damage['tenant_units'][tu]['qnt_damaged']
             num_roof_comps = damage['fnc_filters']['roof_structure'] * damage['tenant_units'][tu]['num_comps']
     
-            comps_day_repaired = repair_complete_day
+            comps_day_repaired = np.array(repair_complete_day)
             roof_structure_recovery_day = np.zeros(num_reals)
             all_comps_day_roof_struct = np.zeros([num_reals,num_comps])
             num_repair_time_increments = sum(damage['fnc_filters']['roof_structure']) # possible unique number of loop increments
@@ -1222,7 +1228,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
             num_comp_damaged = damage['fnc_filters']['roof_weatherproofing'] * damage['tenant_units'][tu]['qnt_damaged']
             num_roof_comps = damage['fnc_filters']['roof_weatherproofing'] * damage['tenant_units'][tu]['num_comps']
     
-            comps_day_repaired = repair_complete_day
+            comps_day_repaired = np.array(repair_complete_day)
             roof_weather_recovery_day = np.zeros(num_reals)
             all_comps_day_roof_weather = np.zeros([num_reals,num_comps])
             num_repair_time_increments = sum(damage['fnc_filters']['roof_weatherproofing']) # possible unique number of loop increments
@@ -1268,14 +1274,14 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         area_affected_bay_all_comps   = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu] * damage['tenant_units'][tu]['qnt_damaged']
         area_affected_build_all_comps = damage['comp_ds_table']['fraction_area_affected'] * building_model['total_area_sf'] * damage['tenant_units'][tu]['qnt_damaged']
         
-        repair_complete_day_w_tmp_w_instabilities = repair_complete_day_w_tmp
+        repair_complete_day_w_tmp_w_instabilities = np.array(repair_complete_day_w_tmp)
         if tu > 0: #FZ# changed to 0 to account for python index starting from 0.
             area_affected_below = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu-1] * damage['tenant_units'][tu-1]['qnt_damaged']
             area_affected_bay_all_comps[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(
                 area_affected_below[:,damage['fnc_filters']['vert_instabilities']],area_affected_bay_all_comps[:,damage['fnc_filters']['vert_instabilities']])
             repair_time_below = damage['tenant_units'][tu-1]['recovery']['repair_complete_day_w_tmp']
             repair_complete_day_w_tmp_w_instabilities[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(
-                repair_time_below[:,damage['fnc_filters']['vert_instabilities']], repair_complete_day_w_tmp[:,damage['fnc_filters']['vert_instabilities']])
+                repair_time_below[:,damage['fnc_filters']['vert_instabilities']], np.array(repair_complete_day_w_tmp)[:,damage['fnc_filters']['vert_instabilities']])
 
     
         comp_affected_area = np.zeros([num_reals,num_comps])
@@ -1330,7 +1336,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         if unit['is_water_required'] == 1:
             # determine effect on funciton at this tenant unit
             # any major damage to the branch pipes (small diameter) failes for this tenant unit
-            tenant_sys_recovery_day = np.nanmax(repair_complete_day * damage['fnc_filters']['water_unit'], axis=1) 
+            tenant_sys_recovery_day = np.nanmax(np.array(repair_complete_day) * damage['fnc_filters']['water_unit'], axis=1) 
             recovery_day['water'][:,tu] = np.fmax(system_operation_day['building']['water_main'],tenant_sys_recovery_day)
             
             # Consider effect of external water network
@@ -1338,7 +1344,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
             recovery_day['water'] = np.fmax(recovery_day['water'], np.array(utility_repair_day).reshape(num_reals,1))
             
             # distribute effect to the components
-            comp_breakdowns['water'][:,:,tu] = np.fmax(system_operation_day['comp']['water_main'], repair_complete_day * damage['fnc_filters']['water_unit'])
+            comp_breakdowns['water'][:,:,tu] = np.fmax(system_operation_day['comp']['water_main'], np.array(repair_complete_day) * damage['fnc_filters']['water_unit'])
         
 
 
@@ -1348,7 +1354,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         if unit['is_electrical_required'] == 1:
             # determine effect on funciton at this tenant unit
             # any major damage to the unit level electrical equipment failes for this tenant unit
-            tenant_sys_recovery_day = np.nanmax(repair_complete_day * damage['fnc_filters']['electrical_unit'], axis=1)
+            tenant_sys_recovery_day = np.nanmax(np.array(repair_complete_day) * damage['fnc_filters']['electrical_unit'], axis=1)
             recovery_day['electrical'][:,tu] =np.fmax(system_operation_day['building']['electrical_main'], tenant_sys_recovery_day)
             
             # Consider effect of external water network
@@ -1356,7 +1362,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
             recovery_day['electrical'] = np.fmax(recovery_day['electrical'], np.array(utility_repair_day).reshape(num_reals,1))
             
             # distribute effect to the components
-            comp_breakdowns['electrical'][:,:,tu] = np.fmax(system_operation_day['comp']['electrical_main'], repair_complete_day * damage['fnc_filters']['electrical_unit'])
+            comp_breakdowns['electrical'][:,:,tu] = np.fmax(system_operation_day['comp']['electrical_main'], np.array(repair_complete_day) * damage['fnc_filters']['electrical_unit'])
 
         
         ## HVAC System
@@ -1364,7 +1370,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         if unit['is_hvac_required'] == 1:
             # Nonredundant equipment
             # any major damage to the equipment servicing this tenant unit fails the system for this tenant unit
-            nonredundant_sys_repair_day = np.nanmax(repair_complete_day * damage['fnc_filters']['hvac_unit_nonredundant'], axis=1)
+            nonredundant_sys_repair_day = np.nanmax(np.array(repair_complete_day) * damage['fnc_filters']['hvac_unit_nonredundant'], axis=1)
     
             # Redundant systems
             # only fail system when a sufficient number of component have failed
@@ -1411,7 +1417,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
                 # once, which is true for our current repair schedule (ie
                 # system level at each story)
                 redundant_sys_repair_day = np.fmax(redundant_sys_repair_day,
-                    np.nanmax(tenant_subsystem_failure.reshape(num_reals,1) * this_redundant_sys.reshape(1, num_comps) * repair_complete_day, axis=1))
+                    np.nanmax(tenant_subsystem_failure.reshape(num_reals,1) * this_redundant_sys.reshape(1, num_comps) * np.array(repair_complete_day), axis=1))
     
             # Combine tenant level equipment with main building level equipment
             tenant_hvac_fnc_recovery_day = np.fmax(redundant_sys_repair_day, nonredundant_sys_repair_day)
@@ -1431,7 +1437,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
     
                     # Assess subsystem recovery day for this tenant unit
                     subsystem_recovery_day, subsystem_comp_recovery_day = fn_quantify_hvac_subsystem_recovery_day(
-                        damage['fnc_filters'][subsystem_handle[sub]], total_num_comps, repair_complete_day, initial_damaged,
+                        damage['fnc_filters'][subsystem_handle[sub]], total_num_comps, np.array(repair_complete_day), initial_damaged,
                         damaged_comps, subsystem_threshold, damage['comp_ds_table']['comp_idx'], damage['comp_ds_table']['is_sim_ds'])
     
                     # Compile with tenant unit performacne and component breakdowns
