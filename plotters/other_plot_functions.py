@@ -1,13 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Dec  1 16:15:28 2022
-
-@author: fzai683
-"""
-
 def plt_heatmap_breakdowns(recovery, plot_dir):
     '''Plot the time and percent of realizations that each system and/or 
-    component is impeding function as a heatmap
+    component is impeding function as a heatmap and as lineplots
     
     Parameters
     ----------
@@ -27,12 +20,42 @@ def plt_heatmap_breakdowns(recovery, plot_dir):
     import os
     import numpy as np
     
+    
     ## Initial Setup
     if os.path.exists(plot_dir) == False:
         os.mkdir(plot_dir)
     plot_dir=plot_dir +'/'
     
-    perform_targ_labs = ['Immediately', '>3 Days', '>7 Days', '>2 Weeks', '>1 Month', '>6 Months', '>1 Year']
+    perform_targ_days = recovery['reoccupancy']['breakdowns']['perform_targ_days']
+    perform_targ_labs = ['Immediately', '>3 Days', '>7 Days', '>2 Weeks', '>1 Month', '>2 Months', '>3 Months', '>4 Months', '>6 Months', '>9 Months', '>1 Year', ]
+    
+    #FZ# Maximum day for recovery amongs all tenant units and all realizations
+    recovery_day_max = perform_targ_days[-1]
+   
+    if recovery_day_max <= 365:
+        perform_targ_labs = perform_targ_labs # Number of days for each performance target stripe
+    if recovery_day_max > 365:
+        num_years = (int(np.floor((recovery_day_max)/365)))
+        
+        # If number of complete years is more than 2
+        for yr in range(num_years-1):
+            quarters =[1,2,3]
+            for qtr in quarters:
+                if yr == 0:
+                    perform_targ_labs.append('>' + str(yr+1) +' Year & ' + str(qtr*3)+ ' months')
+                if yr > 0:
+                    perform_targ_labs.append('>' + str(yr+1) +' Years & ' + str(qtr*3)+ ' months')    
+            perform_targ_labs.append('>' + str(yr+2) +' Years')
+        
+        # For final incomplete year
+        num_quarters = int(np.floor((recovery_day_max - num_years*365)/90))
+        compl_yr = perform_targ_labs[-1]
+        for qtr in range(num_quarters):
+            perform_targ_labs.append(compl_yr + ' & '+str((qtr+1)*3) + ' Months')
+
+        perform_targ_labs.append(perform_targ_labs[-1] + ' & ' + str(int(perform_targ_days[-1] - perform_targ_days[-2])) + ' Days')    
+
+    
     var = ['component_breakdowns', 'system_breakdowns']
     labs = ['comp_names', 'system_names']
     plt_ht = [10, 8]
@@ -40,6 +63,80 @@ def plt_heatmap_breakdowns(recovery, plot_dir):
     ## Plot Heatmaps
     fnc_states = list(recovery.keys())
     for fs in range(len(fnc_states)):
+        
+        perform_targ_days = recovery[fnc_states[fs]]['breakdowns']['perform_targ_days']
+        perform_targ_labs = ['Immediately', '>3 Days', '>7 Days', '>2 Weeks', '>1 Month', '>2 Months', '>3 Months', '>4 Months', '>6 Months', '>9 Months', '>1 Year', ]
+        
+        #FZ# Maximum day for recovery amongs all tenant units and all realizations
+        recovery_day_max = perform_targ_days[-1]
+       
+        if recovery_day_max <= 365:
+            perform_targ_labs = perform_targ_labs # Number of days for each performance target stripe
+        if recovery_day_max > 365:
+            num_years = (int(np.floor((recovery_day_max)/365)))
+            
+            # If number of complete years is more than 2
+            for yr in range(num_years-1):
+                quarters =[1,2,3]
+                for qtr in quarters:
+                    if yr == 0:
+                        perform_targ_labs.append('>' + str(yr+1) +' Year & ' + str(qtr*3)+ ' months')
+                    if yr > 0:
+                        perform_targ_labs.append('>' + str(yr+1) +' Years & ' + str(qtr*3)+ ' months')    
+                perform_targ_labs.append('>' + str(yr+2) +' Years')
+            
+            # For final incomplete year
+            num_quarters = int(np.floor((recovery_day_max - num_years*365)/90))
+            compl_yr = perform_targ_labs[-1]
+            for qtr in range(num_quarters):
+                perform_targ_labs.append(compl_yr + ' & '+str((qtr+1)*3) + ' Months')
+    
+            perform_targ_labs.append(perform_targ_labs[-1] + ' & ' + str(int(perform_targ_days[-1] - perform_targ_days[-2])) + ' Days')        
+        
+        # system breakdown for line plots
+        sys_bkdn = np.array(recovery[fnc_states[fs]]['breakdowns'][var[1]])
+        systs = recovery[fnc_states[fs]]['breakdowns'][labs[1]]
+        # no. of systems in one plot (total 3 plots)
+        num_systems = int(np.floor(len(systs)/3))
+        
+        # Plot 1
+        plt.figure(figsize=([6,6]))
+        for syst in range(num_systems):
+            plt.plot(perform_targ_days, sys_bkdn[syst], marker ='o', label=systs[syst])
+        plt.ylim([0,1])
+        plt.xlabel('Recovery Time After Earthquake (Days')
+        plt.ylabel('Fraction of Realizations Affecting Building')
+        plt.title(var[1] +' '+fnc_states[fs] + ' lineplot 1')
+        plt.legend()
+        plt.grid()
+        plt.savefig(plot_dir + var[1] +' '+fnc_states[fs] + ' lineplot 1.png', dpi=300)
+        
+        # Plot 2
+        plt.figure(figsize=([6,6]))
+        for syst in range(num_systems):
+            plt.plot(perform_targ_days, sys_bkdn[num_systems + syst], marker ='o', label=systs[num_systems + syst])
+        plt.ylim([0,1])
+        plt.xlabel('Recovery Time After Earthquake (Days')
+        plt.ylabel('Fraction of Realizations Affecting Building')
+        plt.title(var[1] +' '+fnc_states[fs] + ' lineplot 2')
+        plt.legend()
+        plt.grid()
+        plt.savefig(plot_dir + var[1] +' '+fnc_states[fs] + ' lineplot 2.png', dpi=300)        
+        
+        # Plot 3
+        plt.figure(figsize=([6,6]))
+        for syst in range(len(systs) - num_systems*2):
+            plt.plot(perform_targ_days, sys_bkdn[2*num_systems + syst], marker ='o', label=systs[2*num_systems + syst])
+        plt.ylim([0,1])
+        plt.xlabel('Recovery Time After Earthquake (Days')
+        plt.ylabel('Fraction of Realizations Affecting Building')
+        plt.title(var[1] +' '+fnc_states[fs] + ' lineplot 3')
+        plt.legend()
+        plt.grid()
+        plt.savefig(plot_dir + var[1] +' '+fnc_states[fs] + ' lineplot 3.png', dpi=300)
+        
+        
+        # Heat maps
         for v in range(len(var)):
             y_labs = recovery[fnc_states[fs]]['breakdowns'][labs[v]]
             data = np.array(recovery[fnc_states[fs]]['breakdowns'][var[v]])
@@ -52,12 +149,13 @@ def plt_heatmap_breakdowns(recovery, plot_dir):
             h.set(xlabel  = 'Recovery Time After Earthquake')
             # h.set(ylabel = labs[v])
             h.set_title(title, x=0.5, y=1.05)
-            plt.xticks(rotation=45)
+            plt.xticks(rotation=90)
             plt.subplots_adjust(bottom=0.15)
             
             plt.savefig(plot_dir + var[v] +' '+fnc_states[fs] + '.png', dpi=300)
 
     return
+
 
 def plt_histograms( recovery, plot_dir ):
     
@@ -98,6 +196,7 @@ def plt_histograms( recovery, plot_dir ):
         
     return
 
+
 def plt_recovery_trajectory( recovery, full_repair_time, plot_dir):
     '''Plot mean recovery trajectories
     
@@ -127,13 +226,18 @@ def plt_recovery_trajectory( recovery, full_repair_time, plot_dir):
         os.mkdir(plot_dir)
     plot_dir=plot_dir +'/'
     
+    
+
     # Calculate mean recovery times
     reoc = np.mean(np.array(recovery['reoccupancy']['recovery_trajectory']['recovery_day']), axis=0)
     func = np.mean(np.array(recovery['functional']['recovery_trajectory']['recovery_day']), axis=0)
+    med = np.median(np.array(recovery['functional']['recovery_trajectory']['recovery_day']), axis=0)
+    per_10 = np.percentile(np.array(recovery['functional']['recovery_trajectory']['recovery_day']), 10, axis=0)
+    per_90 = np.percentile(np.array(recovery['functional']['recovery_trajectory']['recovery_day']), 90, axis=0)
     full = np.mean(full_repair_time)
     level_of_repair = recovery['functional']['recovery_trajectory']['percent_recovered']
     
-    ## Plot Recovery Trajectory
+    # Plot Recovery Trajectory
     plt.rcParams["font.family"] = "Times New Roman"
     plt.figure(figsize=(6,4)) 
     plt.plot(reoc, level_of_repair,'r-', linewidth = 1.5, label = 'Re-Occupancy') 
@@ -144,12 +248,29 @@ def plt_recovery_trajectory( recovery, full_repair_time, plot_dir):
     plt.ylabel('Fraction of Floor Area')
     plt.legend(loc='upper left')
     plt.grid()
+    plt.show()
     
     plt.savefig(plot_dir + 'recovery_trajectory.png', dpi=300)
+    
+    plt.figure(figsize=(6,4))
+    for i in range(len(recovery['functional']['recovery_trajectory']['recovery_day'])):
+        plt.plot(recovery['functional']['recovery_trajectory']['recovery_day'][i] , level_of_repair, color = 'lightgrey', linewidth = 0.5)
+    plt.plot(med, level_of_repair,'r-', linewidth = 1.5, label= 'Median')
+    plt.plot(per_10, level_of_repair,'b--', linewidth = 1.0, label= '10th percentile')
+    plt.plot(per_90, level_of_repair,'b--', linewidth = 1.0, label= '90th percentile')
+    plt.xlim([0,np.ceil((max(max(recovery['functional']['recovery_trajectory']['recovery_day'])))/10)*10])
+    plt.title('Functional Recovery Trajectories')
+    plt.xlabel('Days After Earthquake')
+    plt.ylabel('Fraction of Floor Area')
+    plt.legend(loc='upper left')
+    plt.grid()    
 
+    plt.savefig(plot_dir + 'functional_recovery_trajectories.png', dpi=300)
+    
     return
 
-def plt_gantt_chart(p_idx, recovery, full_repair_time, workers, schedule, impede, plot_dir, plot_name):
+
+def plt_gantt_chart(p_idx, recovery, full_repair_time, workers, schedule, impede, plot_dir, plot_name, systems):
     '''Plot gantt chart for a single realization of the functional recovery
     assessment
     
@@ -197,7 +318,7 @@ def plt_gantt_chart(p_idx, recovery, full_repair_time, workers, schedule, impede
     plot_dir=plot_dir +'/'
     
     imps = list(impede.keys())
-    sys = list(impede['contractor_mob'].keys())
+    sys = list(systems)
     
     ## Format Gantt Chart Data
     recovery_trajectory = {
@@ -216,56 +337,28 @@ def plt_gantt_chart(p_idx, recovery, full_repair_time, workers, schedule, impede
     # Collect Impedance Times
     sys_imp_times = []
     labs = []
-    for s in range(len(sys)):
-        for i in range(len(imps)):
-            if 'complete_day' in impede[imps[i]].keys():
-                duration = impede[imps[i]]['complete_day'][p_idx] - impede[imps[i]]['start_day'][p_idx]
-                if duration > 0:
-                    sys_imp_times.append([impede[imps[i]]['start_day'][p_idx], duration])
-                    labs.append(imps[i][0].upper() + imps[i][1:len(imps[i])].replace('_',' '))
-
-                
-            elif sys[s] in impede[imps[i]].keys():
-                duration = impede[imps[i]][sys[s]]['complete_day'][p_idx] - impede[imps[i]][sys[s]]['start_day'][p_idx]
-                if duration > 0:
-                    sys_imp_times.append([impede[imps[i]][sys[s]]['start_day'][p_idx], duration])
-                    labs.append(sys[s][0].upper() + sys[s][1:len(sys[s])] + ' ' + imps[i].replace('_',' '))
- 
-        
+    for i in range(len(imps)):
+        duration = impede[imps[i]]['complete_day'][p_idx] - impede[imps[i]]['start_day'][p_idx]
+        # if duration > 0:
+        sys_imp_times.append([impede[imps[i]]['start_day'][p_idx], duration])
+        labs.append(imps[i][0].upper() + imps[i][1:len(imps[i])].replace('_',' '))
+     
     labs_imp = np.array(labs)
-    # y_imp = np.flip(np.array(sys_imp_times), axis=0)
     y_imp = np.array(sys_imp_times)
-    # Find and delete repeatative entries
-    rep_lab=np.ones(len(labs_imp)).astype(bool)
-    for i in np.unique(labs_imp):
-        num=0
-        for j in range(len(labs)):
-            if i == labs[j]:
-                num=num+1
-                if num >1:
-                    rep_lab[j] = False
-                    
-    labs_imp = labs_imp[rep_lab]
-    y_imp = y_imp[rep_lab,:]
-    
-    labs_imp = np.flip(labs_imp)
-    y_imp = np.flip(y_imp, axis=0)
 
-    
     # Collect Repair Times 
     sys_repair_times = []
     labs = []
-    for s in range(len(sys)): # WARNING: This assumes the system order in the output of repair schedule is the same order has the impedance breakdowns
-        duration = schedule['repair_complete_day']['per_system'][p_idx][s] - schedule['repair_start_day']['per_system'][p_idx][s]
+    for s in range(len(sys)): 
+        duration = schedule['full']['repair_complete_day']['per_system'][p_idx][s] - schedule['full']['repair_start_day']['per_system'][p_idx][s]
         if duration > 0:
-            sys_repair_times.append([schedule['repair_start_day']['per_system'][p_idx][s], duration])
+            sys_repair_times.append([schedule['full']['repair_start_day']['per_system'][p_idx][s], duration])
             labs.append(sys[s][0].upper() + sys[s][1:len(sys[s])] + ' Repairs')
 
     labs.reverse()    
     labs_rep = labs
     y_rep = np.flip(np.array(sys_repair_times), axis=0)
     ## Plot Gantt
-    # x_limit = max(np.ceil(max(recovery_trajectory['ful_rep'])/10)*10, 1)
     
     plt.rcParams["font.family"] = "Times New Roman"
     # Impedance Time
@@ -303,28 +396,3 @@ def plt_gantt_chart(p_idx, recovery, full_repair_time, workers, schedule, impede
     fig.savefig(plot_dir + plot_name + '.png', dpi=300)
     
     return
-
-    # % Set and Save plot
-    # set(gcf,'position',[10,10,800,600])
-    # saveas(gcf,[plot_dir filesep plot_name],'png')
-    # close
-    
-    # end
-    
-    # function [] = fn_format_subplot(ax,x_limit,y_lab,x_lab,tle)
-    #     ax.XGrid = 'on';
-    #     ax.XMinorGrid = 'on';
-    #     xlim([0,x_limit])
-    #     box on
-    #     set(gca,'fontname','times')
-    #     set(gca,'fontsize',9)
-    #     if ~isempty(y_lab)
-    #         ylabel(y_lab)
-    #     end
-    #     if ~isempty(x_lab)
-    #         xlabel(x_lab)
-    #     else
-    #         set(gca,'XTickLabel',[])
-    #     end
-    #     title(tle)
-    # end

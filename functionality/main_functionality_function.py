@@ -1,7 +1,6 @@
-
 def main_functionality(damage, building_model, damage_consequences, 
                        utilities, functionality_options, tenant_units, 
-                       subsystems):
+                       subsystems, impeding_temp_repairs):
     '''Calculates building re-occupancy and function based on simulations of
     building damage and calculates the recovery times of each recovery state
     based on a given repair schedule
@@ -43,10 +42,14 @@ def main_functionality(damage, building_model, damage_consequences,
     # Downtime including external delays
     recovery = {}
     recovery['reoccupancy'] = fn_calculate_reoccupancy.fn_calculate_reoccupancy(damage, damage_consequences, utilities,
-        building_model, subsystems, functionality_options, tenant_units)
+        building_model, subsystems, functionality_options, tenant_units, impeding_temp_repairs)
     
     recovery['functional'] =  fn_calculate_functionality.fn_calculate_functionality(damage, damage_consequences, utilities,
         building_model, subsystems, recovery['reoccupancy'], functionality_options, tenant_units)
+    
+    # # delete all the extra per-realization data
+    del recovery['reoccupancy']['breakdowns']['component_breakdowns_all_reals']
+    del recovery['functional']['breakdowns']['component_breakdowns_all_reals']
     
     return recovery
 

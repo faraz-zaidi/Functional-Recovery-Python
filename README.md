@@ -29,8 +29,6 @@ A brief description of the various input and output variables are provided below
    Python dictionary containing optional method inputs for the assessment of the repair schedule
  - **functionality_options**: Python dictionary
    Python dictionary containing optional method inputs for the assessment of building function, such as functionality limit state thresholds
- - **regional_impact**: Python dictionary 
-   general inputs that quantify regional impact on individual building performance
  - **building_model**: Python dictionary
    Python dictionary containing general information about the building such as the number of stories and the building area
  - **damage**: Python dictionary
@@ -97,8 +95,10 @@ The Python file listed below defines additional assessment inputs based on set o
  - **optional_inputs.py**: Defines default variables for the impedance_options, repair_time_options, functionality_options, and regional_impact variables listed in the inputs schema.
 
 ### Static Data
-The csv tables listed below contain default componet, damage state, system, and tenant function attributes that can be used to populate the required assessment inputs according to the methodology. Either in build_inputs.py point to the location of these tables in the _static_tables_ directory, or copy and modify them as you see fit and place them in the root directory of the build script.
+The csv tables listed below contain default component, damage state, system, and tenant function attributes that can be used to populate the required assessment inputs according to the methodology. Either in build_inputs.py point to the location of these tables in the _static_tables_ directory, or copy and modify them as you see fit and place them in the root directory of the build script.
  - **component_attributes.csv**: Attributes of components in the FEMA P-58 fragility database that are required for the functional recovery assessment.
  - **damage_state_attribute_mapping.csv**: Attributes of damage state in the FEMA P-58 fragility database and their affect on function and reoccupancy.
  - **subsystems.csv**: Attributes of each default subsystem considered in the method.
  - **tenant_function_requirements.csv**: Default tenant requirements for function for various occupancy classes.
+ - **systems.csv**: Attributes of each default ssytem considered in the method.
+ - **temp_repair_class.csv**: Attributes of each temprary repair class considered in the method.

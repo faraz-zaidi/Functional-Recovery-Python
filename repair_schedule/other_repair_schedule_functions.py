@@ -73,7 +73,7 @@ def fn_allocate_workers_stories(total_worker_days, required_workers_per_story,
         needs_repair = total_worker_days > 0
     
         # Defined Required Workers
-        required_workers_per_story = needs_repair * required_workers_per_story
+        required_workers_per_story = needs_repair * required_workers_per_story.copy()
         
         '''Assign Workers to each story -- assumes that we wont drop the number
         of crews in order to meet worker per sqft limitations, and instead
@@ -98,16 +98,9 @@ def fn_allocate_workers_stories(total_worker_days, required_workers_per_story,
         # Define the start of repairs for each story
         start_repair_filt = np.isnan(repair_start_day) & (assigned_workers_per_story > 0)
         
-        max_day_completed_so_far = np.transpose(np.multiply(np.amax(repair_complete_day, axis=1), np.ones([num_stories,num_reals]))) #FZ# transpose done fto align the arrays for operation
-        
-        
-        
-        
+        max_day_completed_so_far = np.transpose(np.multiply(np.amax(repair_complete_day, axis=1), np.ones([num_stories,num_reals]))) #FZ# transpose done to align the arrays for operation
+         
         repair_start_day[start_repair_filt] =  max_day_completed_so_far[start_repair_filt]
-        
-        
-        
-        
         
         # Calculate the time associated with this increment of the while loop
         in_progress = assigned_workers_per_story > 0 # stories where work is being done
@@ -130,10 +123,7 @@ def fn_allocate_workers_stories(total_worker_days, required_workers_per_story,
     return repair_start_day, repair_complete_day, max_workers_per_story
     
 
-
-
-
-def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_workers_per_story):
+def fn_calc_system_repair_time(damage, repair_type, systems, max_workers_per_building, max_workers_per_story):
     ''' From Dustin's work
     Determine the repair time for each system if repaired in isolation 
       
@@ -141,7 +131,10 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
        ----------
        damage: dictionary
          contains per damage state damage and loss data for each component in the building
-         
+       
+       repair_type: string
+         String identifier indicating whether the repair are temporary or full
+  
        systems: DataFrame
          data table containing information about each system's attributes
          
@@ -174,12 +167,8 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
       
        Notes
        -----'''
-    
-    ## Initial Setup
-    # Import Packages
-    from repair_schedule import other_repair_schedule_functions
-    
-    def fn_repair_sequence_parameters(damage, sys, num_du_per_crew, 
+       
+    def fn_repair_sequence_parameters(damage, repair_type, sys, num_du_per_crew, 
                                       max_crews_per_comp_type, 
                                       max_workers_per_story, 
                                       max_workers_per_building):
@@ -188,10 +177,23 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
         system. Based on worker limiations, and component worker days data from
         the FEMA P-58 assessment.'''
         
+        # Define Repair Type Variables (variable within the damage object)
+        if repair_type == 'full':
+            repair_time_var = 'worker_days'
+            system_var = 'system'
+            crew_size_var = 'crew_size'
+        elif repair_type == 'temp':
+            repair_time_var = 'tmp_worker_day'
+            system_var = 'tmp_repair_class'
+            crew_size_var = 'tmp_crew_size'
+        else:
+            sys.exit('error!. Unexpected Repair Type')
+
+
         # Define Initial Parameters
         num_stories = len(damage['tenant_units']) 
-        num_reals, num_comps = np.size(damage['tenant_units'][0]['worker_days'],0), np.size(damage['tenant_units'][0]['worker_days'],1)
-        sequence_filt = np.array(damage['comp_ds_table']['system']) == sys # identifies which ds indices are in this seqeunce.
+        num_reals, num_comps = np.size(damage['tenant_units'][0]['worker_days'],0), np.size(damage['tenant_units'][0][repair_time_var],1)
+        sequence_filt = np.array(damage['comp_ds_table'][system_var]) == sys # identifies which ds indices are in this seqeunce.
         comp_types = np.unique(np.array(damage['comp_ds_table']['comp_idx'])[sequence_filt]) # Types of components in this system
         
         # Pre-allocatate variables
@@ -204,7 +206,7 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
         for s in range(num_stories):
             # Define damage properties of this system at this story
             num_damaged_units[:,s] = np.sum((1*sequence_filt) * damage['tenant_units'][s]['qnt_damaged'], axis=1) #FZ# Total number of damaged components of one system in one storey
-            is_damaged = np.array(damage['tenant_units'][s]['qnt_damaged']) > 0 #FZ# checking for which components in which realizations are damaged
+            is_damaged = np.logical_and(np.array(damage['tenant_units'][s]['qnt_damaged']) > 0, np.array(damage['tenant_units'][s][repair_time_var]) > 0) #FZ# checking for which components in which realizations are damaged
             is_damaged_building = is_damaged_building | is_damaged              #FZ# compiling for all stories. if there is damage at any story, building is damaged
             
             for c in range(len(comp_types)):
@@ -212,17 +214,17 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
             
         
             # Caluculate total worker days per story per sequences
-            total_worker_days[:,s] = np.sum(np.array(damage['tenant_units'][s]['worker_days'])[:,sequence_filt], axis=1) # perhaps consider doing when we first set up this damage data structure
+            total_worker_days[:,s] = np.sum(np.array(damage['tenant_units'][s][repair_time_var])[:,sequence_filt], axis=1) # perhaps consider doing when we first set up this damage data structure
             
-            # Determine the required crew size needed for these repairs
-            repair_time_per_comp = np.array(damage['tenant_units'][s]['worker_days']) / np.array(damage['comp_ds_table']['crew_size'])
+            # Determine the required crew size needed for  these repairs
+            repair_time_per_comp = np.array(damage['tenant_units'][s][repair_time_var]) / np.array(damage['comp_ds_table'][crew_size_var])
             average_crew_size[:,s] = total_worker_days[:,s] / np.sum(repair_time_per_comp[:,sequence_filt], axis=1)
         
             
         # Define the number of crews needed based on the extent of damage
         num_crews = np.ceil(num_damaged_units / num_du_per_crew)
-        num_crews = np.minimum(num_crews, max_crews_per_comp_type * num_damaged_comp_types)
-        num_crews = np.minimum(num_crews, np.ceil(num_damaged_units)) # Safety check: num crews should never be greater than the number of damaged components
+        num_crews = np.fmin(num_crews, max_crews_per_comp_type * num_damaged_comp_types)
+        num_crews = np.fmin(num_crews, np.ceil(num_damaged_units)) # Safety check: num crews should never be greater than the number of damaged components
         
         # Round up total worker days to the nearest day to speed up the worker 
         # allocation loop and implicitly consider change of trade delays
@@ -237,7 +239,7 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
         # and the assumed crew size
         worker_upper_lim = np.minimum(max_workers_per_story , max_workers_per_building)
         max_num_crews_per_story = np.fmax(np.floor(worker_upper_lim / average_crew_size), 1)
-        num_crews = np.minimum(num_crews, max_num_crews_per_story) 
+        num_crews = np.fmin(num_crews, max_num_crews_per_story) 
         
         # Calculate the total number of workers per story for this system
         num_workers = average_crew_size* num_crews
@@ -253,125 +255,44 @@ def fn_calc_system_repair_time(damage, systems, max_workers_per_building, max_wo
         return total_worker_days, num_workers, average_crew_size, max_crews_building
     
     # General Varaible
-    num_reals = len(damage['tenant_units'][0]['worker_days']);
+    num_reals = len(damage['tenant_units'][0]['worker_days'])
     schedule = {'system_totals' : {'repair_days' : np.zeros([num_reals,len(systems)])}}
     schedule['system_totals']['num_workers'] = np.zeros([num_reals,len(systems)])
     
     ## Allocate workers to each story for each system
     # Repair finish times assumes all sequences start on day zero
     schedule['per_system']={}    
-    for sys in range(len(systems)):
-        schedule['per_system'][sys]={}
+    for syst in range(len(systems)):
+        schedule['per_system'][syst]={}
         # Define the Crew workers and total workers days for this sequence
         # in arrays of [num reals by num stories]
-        total_worker_days, num_workers, average_crew_size, max_crews_building = fn_repair_sequence_parameters(damage,
-            systems['id'][sys], 
-            systems['num_du_per_crew'][sys],
-            systems['max_crews_per_comp_type'][sys],
+        total_worker_days, num_workers, average_crew_size, max_crews_building = fn_repair_sequence_parameters(damage, repair_type,
+            systems['id'][syst], 
+            systems['num_du_per_crew'][syst],
+            systems['max_crews_per_comp_type'][syst],
             max_workers_per_story,
             max_workers_per_building
         )
         # Allocate workers to each story and determine the total days until
         # repair is complete for each story and sequence
 
-        
-        AA,BB,CC = other_repair_schedule_functions.fn_allocate_workers_stories(total_worker_days, num_workers, 
+        # other_repair_schedule_functions.
+        AA,BB,CC = fn_allocate_workers_stories(total_worker_days, num_workers, 
                                       average_crew_size, max_crews_building, 
                                       max_workers_per_building)
 
-        schedule['per_system'][sys]['repair_start_day']=AA
-        schedule['per_system'][sys]['repair_complete_day']=BB
-        schedule['per_system'][sys]['max_num_workers_per_story']=CC
+        schedule['per_system'][syst]['repair_start_day']=AA
+        schedule['per_system'][syst]['repair_complete_day']=BB
+        schedule['per_system'][syst]['max_num_workers_per_story']=CC
     
         # How many days does it take to complete each system in isloation
-        schedule['system_totals']['repair_days'][:,sys] = np.amax(schedule['per_system'][sys]['repair_complete_day'], axis=1)
-        schedule['system_totals']['num_workers'][:,sys] = np.amax(schedule['per_system'][sys]['max_num_workers_per_story'], axis=1)
- 
+        schedule['system_totals']['repair_days'][:,syst] = np.amax(schedule['per_system'][syst]['repair_complete_day'], axis=1)
+        schedule['system_totals']['num_workers'][:,syst] = np.amax(schedule['per_system'][syst]['max_num_workers_per_story'], axis=1)
         
     return schedule
 
 
-def fn_simulate_tmp_repair_times( damage, inpsection_complete_day, beta_temp, surge_factor ):
-    '''Simulate temporary repair times for each componet (where applicable) per
-    realization
-    
-    Parameters
-    ----------
-    damage: dictionary
-     contains per damage state damage and loss data for each component in the building
-    
-    inpsection_complete_day: array [num_reals x 1]
-     simulated day after the earthquake that inpection in completed 
-    
-    beta_temp: number
-     lognormal standard deviation defining the uncertianty in all temporary
-     repair times
-    
-    surge_factor: number
-     amplification factor for temporary repair time based on a post disaster surge
-     in demand for skilled trades and construction supplies
-    
-    
-    Returns
-    -------
-    tmp_repair_complete_day: array [num_reals x num_comp]
-     contains the day (after the earthquake) the temporary repair time is 
-     resolved per damage state damage and realization. Inf represents that
-     there is not temporary repair time available for a given components
-     damage.
-    
-    Notes
-    -----
-     Currently simulate tmp repair times independently between components but correlated between stories'''
-    
-    from scipy.stats import truncnorm
-    # Initialize Parameters
-    num_tenant_units = len(damage['tenant_units'])
-    num_reals, num_comps = np.shape(damage['tenant_units'][0]['qnt_damaged'])   
-    #  Create basic trucated standard normal distribution for later simulation
-    th_low = -2 # Truncate below -2 standard deviations
-    th_high = 2 # Truncate above +2 standard deviations
-    mu = 0
-    sigma = 1
-    trunc_pd = truncnorm((th_low - mu)/sigma, (th_high - mu)/sigma, loc=mu, scale=sigma)   
-    
-    # Determine which damage states require shoring
-    shoring_filt = np.array(damage['comp_ds_table']['requires_shoring'])
-    
-    tmp_repair_filt = np.array(damage['comp_ds_table']['tmp_fix']) & np.logical_not(np.array(damage['comp_ds_table']['requires_shoring']))
-    
-    ## Go through damage and determine which relization have shoring repairs
-    is_shoring_damage = np.zeros(num_reals, dtype=bool)
-    for tu in range(num_tenant_units):
-        is_shoring_damage = is_shoring_damage | np.array(np.amax(np.array(damage['tenant_units'][tu]['qnt_damaged'])*shoring_filt, axis = 1), dtype=bool)
-
-    ## Simulate temporary repair times
-    # simulate shoring time (assumes correlated throughout whole building)
-    shoring_time_med = max(surge_factor * np.array(damage['comp_ds_table']['tmp_fix_time'])* shoring_filt) # median shoring time for the building is the max among all components
-    prob_sim = np.random.rand(num_reals) # assumes components are correlated
-    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
-    sim_shoring_time = np.ceil(np.exp(x_vals_std_n * beta_temp + np.log(shoring_time_med))) # assume it takes whole days to temporarily fix things
-    
-    # Find the time to perform all shoring in the building
-    building_shoring_time = sim_shoring_time * is_shoring_damage
-    
-    # Simulate temp repair and clean up time
-    # assumes tmp repair times are independent between components but correlated between stories
-    tmp_repair_time = np.array(surge_factor * np.array(damage['comp_ds_table']['tmp_fix_time']) * tmp_repair_filt, dtype=float)
-    tmp_repair_time[tmp_repair_time == 0] = np.inf # convert zero day times to inf to not affect building repair time logic
-    prob_sim = np.random.rand(num_reals, num_comps) # This assumes components are indepednant
-    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
-    sim_tmp_repair_time = np.ceil(np.exp(x_vals_std_n * beta_temp + np.log(tmp_repair_time))) # assume it takes whole days to temporarily fix things
-    
-    # Combine to find total temp repair complete data for each component damage
-    # state (all stories and tenant units)
-    # clean up occurs after all shoring is complete which occurs after
-    # inspection is complete
-    tmp_repair_complete_day = np.transpose(inpsection_complete_day + building_shoring_time + np.transpose(sim_tmp_repair_time))  # temp repairs dont start until after inspection
-    
-    return tmp_repair_complete_day
-
-def fn_prioritize_systems( systems, damage, tmp_repair_complete_day):
+def fn_prioritize_systems( systems, repair_type, damage, tmp_repair_complete_day, impeding_factors):
     '''Determine the priority of worker allocation for each system and realization
     based on default table priorities, whether they have the potential to 
     affect function and whether they are resolved by temporary repairs.
@@ -380,6 +301,9 @@ def fn_prioritize_systems( systems, damage, tmp_repair_complete_day):
     ----------
     systems: DataFrame
       data table containing information about each system's attributes
+    
+    repair_type: string
+      String identifier indicating whether the repair are temporary or full
       
     damage: dictionary
       contains per damage state damage and loss data for each component in the building
@@ -389,7 +313,9 @@ def fn_prioritize_systems( systems, damage, tmp_repair_complete_day):
       resolved per damage state damage and realization. Inf represents that
       there is not temporary repair time available for a given components
       damage.
-       
+    
+    iimpeding_factors: dictionary
+      simulated impedance times   
     Returns
     -------
     sys_idx_priority_matrix: index array [num reals x num systems]
@@ -404,34 +330,61 @@ def fn_prioritize_systems( systems, damage, tmp_repair_complete_day):
     impact on function and prioritize those, this check would need to be
     coupled with the function assessment'''
     
+    import sys
+    
     ## Initial Setup
+    # Define Repair Type Variables (variable within the damage object)
+    if repair_type == 'full':
+        system_var = 'system'
+    elif repair_type == 'temp':
+        system_var = 'tmp_repair_class'
+    else:
+        sys.exit('error!. Unexpected Repair Type')
+
+
     # initialize variables
     num_sys = len(systems)
-    # [num_reals, ~] = size(damage.tenant_units{1}.qnt_damaged);
     num_reals = np.size(damage['tenant_units'][0]['qnt_damaged'],0)    
-    # Find which components potentially affect function accross any tenant unit
     
+    # Find which components potentially affect reoccupancy accross any tenant unit
+    affects_reoccupancy = np.zeros([num_reals, len(damage['comp_ds_table']['comp_id'])], dtype=bool)
+    for s in range(len(damage['tenant_units'])):
+        affects_reoccupancy = np.logical_or(affects_reoccupancy, np.logical_and(damage['fnc_filters']['affects_reoccupancy'], np.array(damage['tenant_units'][s]['qnt_damaged']) > 0))
+
+    
+    # Find which components potentially affect function accross any tenant unit 
     for s in range(len(damage['tenant_units'])):
         # affects_function = zeros(num_reals, len(damagecomp_ds_table));
         affects_function = np.zeros([num_reals, len(damage['comp_ds_table']['comp_id'])], dtype=bool)
         affects_function = np.logical_or(affects_function, np.logical_and(damage['fnc_filters']['affects_function'], np.array(damage['tenant_units'][s]['qnt_damaged']) > 0))
 
-    
-    # identify component damage that is resolved by temporary repairs
-    tmp_repaired = tmp_repair_complete_day < np.inf # inf here means there is not temp repair
        
     ## Define ranks for each system 
+    sys_affects_reoccupancy = np.zeros([num_reals, num_sys]) # only prioritize the systems that potentially affect reoccupancy
     sys_affects_function = np.zeros([num_reals, num_sys]) # only prioritize the systems that potentially affect function
     sys_tmp_repaired = np.zeros([num_reals, num_sys]) # dont prioitize the systems that are completely resolved by temporary repairs
     
-    for sys in range(num_sys):
-        sys_filter = damage['comp_ds_table']['system'] == sys+1 #FZ# +1 done to account for python indexing starting from 0
-        sys_affects_function[:,sys] = np.any(affects_function[:,sys_filter], axis = 1); # any damage that potentially affects function in this system
-        sys_tmp_repaired[:,sys] = np.all(tmp_repaired[:,sys_filter], axis = 1) # all components must be resolved by temp repairs in this system
+    for syst in range(num_sys):
+        sys_filter = damage['comp_ds_table'][system_var] == syst+1 #FZ# +1 done to account for python indexing starting from 0
+        if any(sys_filter): # Only if this system is present
+            sys_affects_reoccupancy[:,syst] = np.any(affects_reoccupancy[:,sys_filter], axis = 1); # any damage that potentially affects function in this system    
+            sys_affects_function[:,syst] = np.any(affects_function[:,sys_filter], axis = 1); # any damage that potentially affects function in this system
+            if tmp_repair_complete_day != []: # Only if temp repair data is passed in
+                all_sys_tmp_repaired = np.all(np.logical_or(tmp_repair_complete_day[:,sys_filter] < np.inf, np.isnan(tmp_repair_complete_day[:,sys_filter])), axis=1) # is every single damaged component resolved by temp repairs
+                tmp_repair_quick = np.nanmax(tmp_repair_complete_day[:,sys_filter], axis=1) < impeding_factors['time_sys'][:,syst] # Are the temp repairs for this system resolved before impeding factors are complete
+                sys_tmp_repaired[:,syst] = np.logical_and(all_sys_tmp_repaired, tmp_repair_quick) # damage is quickly resolved by temp repair
 
-    prioritize_system = np.logical_and(sys_affects_function == 1, sys_tmp_repaired == 0)
+    prioritize_system_reoccupancy = np.logical_and(sys_affects_reoccupancy == 1, sys_tmp_repaired == 0)
+    prioritize_system_function_only = np.logical_and(sys_affects_function == 1, np.logical_and(prioritize_system_reoccupancy, sys_tmp_repaired == 0))
+    non_priorities = np.logical_and(np.logical_not(prioritize_system_reoccupancy), np.logical_not(prioritize_system_function_only))
     
-    sys_priority_matrix = prioritize_system * (100 + np.array(systems['priority'])) + np.logical_not(prioritize_system) * (200 + np.array(systems['priority'])) # the added 200 is just to deprioritize non-function hindering damage
+    '''First prioritize reoccpancy repairs (100 classifies first priority bank, 
+    important for sort function below), then priotize repairs that only 
+    affect function (200 classifies second priority bank). 
+    Finally, repair the systems that dont affect reoccupancy or 
+    function (300 classifies third priority bank)'''
+    
+    sys_priority_matrix = prioritize_system_reoccupancy * (100 + np.array(systems['priority'])) + prioritize_system_function_only * (200 + np.array(systems['priority'])) + non_priorities * (300 + np.array(systems['priority']))
 
     
     # use rank matrix to get row indices of priorities
@@ -439,7 +392,8 @@ def fn_prioritize_systems( systems, damage, tmp_repair_complete_day):
     
     return sys_idx_priority_matrix
 
-def fn_set_repair_constraints(systems, conditionTag):
+
+def fn_set_repair_constraints(systems, repair_type, conditionTag):
     '''Define a constraint matrix to be used by repair schedule
     
     Develops a matrix of various constriants between each system (i.e. what
@@ -449,7 +403,10 @@ def fn_set_repair_constraints(systems, conditionTag):
     ----------
     systems: DataFrame
      data table containing information about each system's attributes
-    
+
+    repair_type: string
+      String identifier indicating whether the repair are temporary or full
+      
     conditionTag: logical array (num_reals x 1)
      Is the building red tagged for each realization
     
@@ -468,28 +425,40 @@ def fn_set_repair_constraints(systems, conditionTag):
     Interiors (column 3) are blocked by struture (value of 1 in the 3rd column)
     HVAC (column 8) is blocked by plumbing (value of 6 in the 8th column)'''
     
+    import sys
     #Initial Setup
     num_sys = len(systems)
     num_reals = len(conditionTag)
     sys_constraint_matrix = np.zeros([num_reals, num_sys])
     
     # Interior Constraints
-    # Interiors are delayed by structural repairs
-    interiors_idx = np.where(np.array(systems['name']) == 'interior')[0] #FZ# [0] is done to convert tuple to np array
-    structure_idx = np.where(np.array(systems['name']) == 'structural')[0]
+    if repair_type == 'full':
+        # Interiors are delayed by structural repairs
+        interiors_idx = np.where(np.array(systems['name']) == 'interior')[0] #FZ# [0] is done to convert tuple to np array
+        structure_idx = np.where(np.array(systems['name']) == 'structural')[0]
  
-    sys_constraint_matrix[:,interiors_idx] = structure_idx+1 #FZ# +1 is done to replace with the system id which starts with 1, but python indexing starts at 0. 
+        sys_constraint_matrix[:,interiors_idx] = structure_idx+1 #FZ# +1 is done to replace with the system id which starts with 1, but python indexing starts at 0. 
+        
+        # Red Tag Constraints
+        # All systems blocked by structural when red tagged
+        for rt in np.where(conditionTag)[0]:
+            for st in np.where(np.array(systems['name']) != 'structural')[0]:
+                sys_constraint_matrix[rt, st] = structure_idx+1
     
-    # Red Tag Constraints
-    # All systems blocked by structural when red tagged
-    for rt in np.where(conditionTag)[0]:
-        for st in np.where(np.array(systems['name']) != 'structural')[0]:
-            sys_constraint_matrix[rt, st] = structure_idx+1
+    elif repair_type == 'temp':
+        shoring_id = 5
+        shoring_filt = systems['id'] == shoring_id
+        if np.any(shoring_filt): # If shoring is considred as a temp repair measure
+            shoring_idx = np.where(shoring_filt)[0][0]
+            sys_constraint_matrix[:,np.logical_not(shoring_filt)] = shoring_idx + 1 # all classes that are not shoring idx are blocked by the shoring idx. #FZ# +1 is done to replace with the system id which starts with 1, but python indexing starts at 0. 
 
+    else:
+        sys.exit('error. Unexpected Repair Type')
+    
     return sys_constraint_matrix
 
 
-def fn_allocate_workers_systems(sys_repair_days, sys_crew_size, 
+def fn_allocate_workers_systems(systems, sys_repair_days, sys_crew_size, 
                                 max_workers_per_building, 
                                 sys_idx_priority_matrix, 
                                 sys_constraint_matrix, 
@@ -497,11 +466,15 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
                                 sys_impeding_factors):
 
 
-    '''Stagger repair to each system and allocate workers based on the repair
+    '''Stager repair to each system and allocate workers based on the repair
     constraints, priorities, and repair times of each system
     
     Parameters
     ----------
+    system_repair_days: [num reals x num systems]
+     Number of days from the start of repair of each to the completion of
+     the system (assuming all sequences start on day zero)
+     
     system_repair_days: [num reals x num systems]
      Number of days from the start of repair of each to the completion of
      the system (assuming all sequences start on day zero)
@@ -550,17 +523,17 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
     def fitler_matrix_by_rows( values, filter_by):
     # Use a identiry matrix to filter values from another matrix by rows
     
-        # Parameters
-        # ----------
-        # values: matrix [n x m]
-        #   values to filter by row
-        # filter: matrix [n x m]
-        #   array indexes to grab from each row of values
-        #
-        # Returns
-        # -------
-        # filtered_values: matrix [n x m]
-        #   values filtered by rows
+        '''Parameters
+        ----------
+        values: matrix [n x m]
+          values to filter by row
+        filter: matrix [n x m]
+          array indexes to grab from each row of values
+        
+        Returns
+        -------
+        filtered_values: matrix [n x m]
+          values filtered by rows'''
         
         # Method
         x2t = np.transpose(values)
@@ -569,7 +542,7 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
         for r in range(np.size(values,0)):
             y4[:, r] = x2t[idx1[:, r], r]
         filtered_values = np.transpose(y4)
-        
+ 
         return filtered_values
 
     
@@ -594,12 +567,12 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
     # Provides an implicit change of trade delay, as well as help to reduce the
     # number of delta increments in the following while loop
     priority_sys_repair_days = np.ceil(priority_sys_repair_days)
-    # priority_sys_impeding_factors = np.ceil(priority_sys_impeding_factors) #FZ# Already rounded. Check requirement
+    priority_sys_impeding_factors = np.ceil(priority_sys_impeding_factors) #FZ# Already rounded. Check requirement
     
     ## Assign workers to each system based on repair constraints
     iter = 0
     current_day = np.zeros(num_reals)
-    priority_sys_waiting_days = priority_sys_impeding_factors
+    priority_sys_waiting_days = priority_sys_impeding_factors.copy()
     while sum(sum(priority_sys_repair_days)) > 0.01:
         iter = iter + 1; 
         if iter > 1000: # keep the while loop pandemic contained
@@ -645,10 +618,10 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
             assigned_workers[enough_workers,s] = np.minimum(required_workers[enough_workers,s], available_workers[enough_workers])
     
             # Define Available Workers
-            # when in series limit available workers to the workers in this
-            # system, assumes when red tagged, first systems is always
-            # structural
-            in_series = np.logical_and(condition_tag, s == 0)
+            # when in series limit available workers to the workers in this system 
+            # (occurs for structural systems when the building is red tagged
+            is_structural = systems['name'][s] == 'structural'
+            in_series = np.logical_and(condition_tag, is_structural)
             available_workers[np.logical_and(in_series, assigned_workers[:,s] > 0)] = 0 #FZ# Python index 0 is structural system
             # when not in series, calc the remaining workers
             available_workers[np.logical_not(in_series)] = available_workers[np.logical_not(in_series)] - assigned_workers[np.logical_not(in_series),s]
@@ -659,7 +632,7 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
         total_repair_days = np.empty(np.shape(in_progress)) # pre-allocate with inf's becuase we take a min later
         total_repair_days[:] = np.inf
         total_repair_days[in_progress] = priority_sys_repair_days[in_progress]
-        total_waiting_days = priority_sys_waiting_days
+        total_waiting_days = priority_sys_waiting_days.copy()   #FZ# Check is.copy() worke here
         
         #FZ##### the problem is here. Check
         total_waiting_days[total_waiting_days == 0] = np.inf # Convert zeros to inf such that zeros are not included in the min in the next step
@@ -669,7 +642,7 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
         delta_days[np.isinf(delta_days)] = 0 # Replace infs from real that has no repair with zero
         
         #FZ# Additional code added to correct the issue with 0 being replaced with infinity in priority_sys_waiting_days and priority_sys_impeding_factors
-        priority_sys_waiting_days[priority_sys_waiting_days == np.inf] = 0
+        # priority_sys_waiting_days[priority_sys_waiting_days == np.inf] = 0
         # priority_sys_impeding_factors[priority_sys_impeding_factors == np.inf] = 0    
         
         # Reduce waiting time
@@ -702,10 +675,10 @@ def fn_allocate_workers_systems(sys_repair_days, sys_crew_size,
     worker_data ={'total_workers' : total_workers, 'day_vector' : day_vector}
 
     return repair_complete_day_per_system, worker_data 
-    
+
 
 def fn_restructure_repair_schedule( damage, system_schedule,
-    repair_complete_day_per_system, systems, tmp_repair_complete_day):
+    repair_complete_day_per_system, systems, repair_type, simulated_red_tags):
     
     '''Redistribute repair schedule data from the system and story level to the component level for use 
     in the functionality assessment (ie, put repair schedule data into the
@@ -726,10 +699,12 @@ def fn_restructure_repair_schedule( damage, system_schedule,
      
     systems: DataFrame
      data table containing information about each system's attributes
-     
-    tmp_repair_complete_day: array [num_reals x num_comp]
-     contains the day (after the earthquake) the temporary repair time is 
-     resolved per damage state damage and realization
+    
+    repair_type: string
+      String identifier indicating whether the repair are temporary or full
+      
+    simulated_red_tags: logical array [num_reals x 1]
+      indicates the realizations that have a red tag
     
     Returns
     -------
@@ -739,60 +714,67 @@ def fn_restructure_repair_schedule( damage, system_schedule,
     
     Notes
     -----'''
+    import sys
     
     ## Initialize Parameters
-    num_sys = len(systems);
+    num_sys = len(systems)
     num_units = len(damage['tenant_units'])
     
+    # Define Repair Type Variables (variable within the damage object)
+    if repair_type == 'full':
+        repair_time_var = 'worker_days'
+        system_var = 'system'
+    elif repair_type == 'temp':
+        repair_time_var = 'tmp_worker_day'
+        system_var = 'tmp_repair_class'
+    else:
+        sys.exit('Unexpected Repair Type')
 
-    ## Redistribute repair schedule data
+    # Initialize recovery field
+    damage_recovery = {}
     for tu in range(num_units):
-        damage['tenant_units'][tu]['recovery'] = {
-            'repair_start_day': np.empty([len(tmp_repair_complete_day), len(damage['tenant_units'][tu]['num_comps'])]),
-            'repair_complete_day': np.empty([len(tmp_repair_complete_day), len(damage['tenant_units'][tu]['num_comps'])]),        
-            'repair_complete_day_w_tmp': np.empty([len(tmp_repair_complete_day), len(damage['tenant_units'][tu]['num_comps'])]),
-            'start_day_w_tmp': np.empty([len(tmp_repair_complete_day), len(damage['tenant_units'][tu]['num_comps'])]),
-            'tmp_day_controls': np.empty([len(tmp_repair_complete_day), len(damage['tenant_units'][tu]['num_comps'])]),
-            'repair_start_day_w_tmp': np.empty([len(tmp_repair_complete_day), len(damage['tenant_units'][tu]['num_comps'])])}
-            
-    for sys in range(num_sys):
-        # Calculate system repair times on each story
-        system_duration = np.amax(system_schedule['per_system'][sys]['repair_complete_day'],axis=1) # total repair time spent in this system over all stories
-        start_day = repair_complete_day_per_system[:,sys] - system_duration
-        story_start_day = np.transpose(start_day+ np.transpose(system_schedule['per_system'][sys]['repair_start_day'])) #FZ# transpose done to align arrays for the operation
-        story_complete_day = np.transpose(start_day + np.transpose(system_schedule['per_system'][sys]['repair_complete_day'])) #FZ# transpose done to align arrays for the operation
-    
-        # Re-distribute to each tenant unit
-        sys_filt = damage['comp_ds_table']['system'] == systems['id'][sys] 
+        # Set to inf as a null repair time (will remain inf for components with
+        # no attributed system) - matters for temp repairs, shouldnt matter for
+        # full repair
+        damage_recovery[tu]={}
+        damage_recovery[tu]['repair_start_day'] = np.empty(np.shape(np.array(damage['tenant_units'][tu]['qnt_damaged'])))
+        damage_recovery[tu]['repair_start_day'][:] = np.nan
+        damage_recovery[tu]['repair_complete_day'] = np.empty(np.shape(np.array(damage['tenant_units'][tu]['qnt_damaged'])))
+        damage_recovery[tu]['repair_complete_day'][:] = np.inf
         
+        # if not damaged, set repair complete time to NaN
+        is_damaged = np.logical_and(np.array(damage['tenant_units'][tu]['qnt_damaged']) > 0, np.array(damage['tenant_units'][tu][repair_time_var]) > 0)
+        damage_recovery[tu]['repair_complete_day'][np.logical_not(is_damaged)] = np.nan
+
+
+   ## Redistribute repair schedule data
+    for syst in range(num_sys):
+        # Calculate system repair times on each story
+        system_duration = np.nanmax(system_schedule['per_system'][syst]['repair_complete_day'], axis=1) # total repair time spent in this system over all stories
+        start_day = repair_complete_day_per_system[:,syst] - system_duration
+        story_start_day = start_day.reshape(len(start_day),1) + system_schedule['per_system'][syst]['repair_start_day']
+        story_complete_day = start_day.reshape(len(start_day),1) + system_schedule['per_system'][syst]['repair_complete_day']
+        
+        # Do not perform temporary repairs when building is red tagged
+        if np.logical_and(repair_type == 'temp', np.any(simulated_red_tags)):
+            story_start_day[simulated_red_tags.astype(bool),:] = np.nan
+            story_complete_day[simulated_red_tags.astype(bool),:] = np.inf
+   
+        # Re-distribute to each tenant unit
+        sys_filt = damage['comp_ds_table'][system_var] == systems['id'][syst] # identifies which ds idices are in this seqeunce  
         for tu in range(num_units):
-            is_damaged = np.array(damage['tenant_units'][tu]['qnt_damaged'])[:,sys_filt] > 0
-            is_damaged = (is_damaged*1).astype(float)
+            is_damaged = np.logical_and(np.array(damage['tenant_units'][tu]['qnt_damaged'])[:,sys_filt] > 0, np.array(damage['tenant_units'][tu][repair_time_var])[:,sys_filt] > 0)
+            is_damaged = (is_damaged * 1).astype(float)
             is_damaged[is_damaged == 0] = np.nan
     
             # Re-distribute repair days to component damage states
-            damage['tenant_units'][tu]['recovery']['repair_start_day'][:,sys_filt] = np.transpose(np.transpose(is_damaged) * story_start_day[:,tu]) #FZ# transpose done to align arrays for the operation
-            damage['tenant_units'][tu]['recovery']['repair_complete_day'][:,sys_filt] = np.transpose(np.transpose(is_damaged) * story_complete_day[:,tu]) #FZ# transpose done to align arrays for the operation
-
-        
-    # Post process for temp repairs
-    for tu in range(num_units):
-        # Calculate the day repairs are completed considering temporary repairs
-        repair_complete_day_no_NaN = np.fmax(damage['tenant_units'][tu]['recovery']['repair_complete_day'] ,0)
-        damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'] = np.minimum(repair_complete_day_no_NaN, tmp_repair_complete_day)
-    
-        # Calculate the day repairs start considering temporary repairs
-        damage['tenant_units'][tu]['recovery']['start_day_w_tmp'] = damage['tenant_units'][tu]['recovery']['repair_start_day']
-        damage['tenant_units'][tu]['recovery']['tmp_day_controls'] = damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'] < repair_complete_day_no_NaN
-        damage['tenant_units'][tu]['recovery']['repair_start_day_w_tmp'][damage['tenant_units'][tu]['recovery']['tmp_day_controls']] = 0
-    
-        # Change zeros in complete day back to NaN (ie no damage)
-        damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'][damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'] == 0] = np.nan
-
-    return damage
+            damage_recovery[tu]['repair_start_day'][:,sys_filt] = is_damaged* story_start_day[:,tu].reshape(len(story_start_day[:,tu]),1)
+            damage_recovery[tu]['repair_complete_day'][:,sys_filt] = is_damaged * story_complete_day[:,tu].reshape(len(story_complete_day[:,tu]),1)
+            
+    return damage_recovery
 
 
-def fn_format_gantt_chart_data( damage, systems ):
+def fn_format_gantt_chart_data( damage, systems, simulated_replacement):
     '''Reformat data from the damage structure into data that is used for the
     gantt charts
     
@@ -800,10 +782,16 @@ def fn_format_gantt_chart_data( damage, systems ):
     ----------
     damage: dictionary
      contains per damage state damage and loss data for each component in the building
+    
     systems: DataFrame
      data table containing information about each system's attributes
     
-    Returns
+    simulated_replacement: array [num_reals x 1]
+     simulated time when the building needs to be replaced, and how long it
+     will take (in days). NaN represents no replacement needed (ie
+     building will be repaired)
+    
+Returns
     -------
     repair_schedule: dictionary
      Contians reformated repair schedule data for gantt chart plots for
@@ -822,8 +810,11 @@ def fn_format_gantt_chart_data( damage, systems ):
     num_stories = len(damage['tenant_units'])
     num_reals = np.size(damage['tenant_units'][0]['recovery']['repair_start_day'],0)
     comps = np.unique(damage['comp_ds_table']['comp_id'])
-    
-    ## Reformate repair schedule data into various breakdowns
+       
+    # Determine replacement cases
+    replace_cases = np.logical_not(np.isnan(simulated_replacement))
+
+    ## Reformat repair schedule data into various breakdowns
     # Per component
     repair_schedule = {'repair_start_day' : {}, 'repair_complete_day' : {}, 'component_names':[]}
     repair_schedule['repair_start_day']['per_component'] = np.empty([num_reals, len(comps)])
@@ -887,8 +878,17 @@ def fn_format_gantt_chart_data( damage, systems ):
             sys_filt = damage['comp_ds_table']['system'] == systems['id'][sys] # identifies which ds idices are in this seqeunce 
             repair_schedule['repair_start_day']['per_story_system'][:,id] = np.nanmin(np.column_stack((repair_schedule['repair_start_day']['per_story_system'][:,id], damage['tenant_units'][s]['recovery']['repair_start_day'][:,sys_filt])), axis=1)
             repair_schedule['repair_complete_day']['per_story_system'][:,id] = np.nanmax(np.column_stack((repair_schedule['repair_complete_day']['per_story_system'][:,id], damage['tenant_units'][s]['recovery']['repair_complete_day'][:,sys_filt])), axis=1)
+    
+    # Overwrite realization for demo and replace cases
+    formats = list(repair_schedule['repair_start_day'].keys())
+    for f in range(len(formats)):
+        repair_schedule['repair_start_day'][formats[f]][replace_cases,:] = 0
+        
+        format_width = np.size(repair_schedule['repair_complete_day'][formats[f]], 1) # apply replacement time to all comps / systems / stories / etc
+        repair_schedule['repair_complete_day'][formats[f]][replace_cases,:] = np.array(simulated_replacement)[replace_cases].reshape(len(np.array(simulated_replacement)[replace_cases]),1) * np.ones([1,format_width])
 
     return repair_schedule
+
 
 
 

@@ -15,51 +15,69 @@ optional_inputs = {
                             "financing" : True,
                             "permitting" : True,
                             "engineering" : True,
-                            "contractor" : True
+                            "contractor" : True,
+                            "long_lead" : False
                             },
 "system_design_time" :      {
                             "f" : 0.04,
-                            "r" : 175,
+                            "r" : 200,
                             "t" : 1.3,
                             "w" : 8
                             },
+"eng_design_min_days" : 14,
+"eng_design_max_days" : 365,
 "mitigation"  :             {
                             "is_essential_facility" : False,
                             "is_borp_equivalent" : False,
                             "is_engineer_on_retainer" : False,
-                            "is_contractor_on_retainer" : False,
+                            "contractor_relationship" : 'good',
+                            "contractor_retainer_time" : 3,
                             "funding_source" : 'private',
-                            "capital_available_ratio" : 0.1
+                            "capital_available_ratio" : 0.02
                             },
 "impedance_beta" : 0.6,
-"impedance_truncation" : 2                
+"impedance_truncation" : 2,
+"default_lead_time" : 182,
+"demand_surge":              {
+                            "include_surge" : 1,
+                            "is_dense_urban_area" : 1,
+                            "site_pga" : 1,
+                            "pga_de": 1
+                            },
+"scaffolding_lead_time" : 5,
+"scaffolding_erect_time" : 2,
+               
                             },
                       
 
 # Repir Schedule Options
 "repair_time_options" : {
-                        "temp_repair_beta" : 0.6,
                         "max_workers_per_sqft_story"  : 0.001,
+                        "max_workers_per_sqft_story_temp_repair"  : 0.005,
                         "max_workers_per_sqft_building" : 0.00025,
                         "max_workers_building_min" :  20,
-                        "max_workers_building_max" :  260
+                        "max_workers_building_max" :  260,
+                        "allow_tmp_repairs" : 1,
+                        "allow_shoring" : 1
                        },
 
 # Functionality Assessment Options
-"functionality_options" : {
+"functionality_options" : {  
+                       "calculate_red_tag" : 1,
+                       "red_tag_clear_time" : 7,
+                       "red_tag_clear_beta" : 0.6,
+                       "include_local_stability_impact" : 1,
                        "door_racking_repair_day" : 3,
                        "egress_threshold" : 0.5,
-                       "egress_threshold_wo_fs" : 0.75,
-                       "required_ratio_operating_hvac_main" : 0.6667,
-                       "required_ratio_operating_hvac_unit" : 0.6667,
+                       "fire_watch" : True,
+                       "local_fire_damamge_threshold" : 0.25,
+                       "min_egress_paths" : 2,
                        "exterior_safety_threshold" : 0.1,
                        "interior_safety_threshold" : 0.25,
-                       "door_access_width_ft" : 9
+                       "door_access_width_ft" : 9,
+                       "heat_utility" : 'gas'
                        },
 
-# Regional Impact
-"regional_impact" : {
-                    "surge_factor" : 1}
 }
 
 with open("optional_inputs.json", "w") as outfile:
