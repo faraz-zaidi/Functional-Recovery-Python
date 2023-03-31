@@ -33,15 +33,15 @@ def fn_allocate_workers_stories(total_worker_days, required_workers_per_story,
       
     Returns
     -------
-    repair_start_day: matrix [num reals x num stories]
+    repair_start_day: array [num reals x num stories]
       The number of days from the start of repair of this system until the repair of this system 
       starts on each story
       
-    repair_complete_day: matrix [num reals x num stories]
+    repair_complete_day: array [num reals x num stories]
       The number of days from the start of repair of this system until each story is
       repaired for damage in this system
       
-    max_workers_per_story: matrix [num reals x num stories]
+    max_workers_per_story: array [num reals x num stories]
       number of workers required for the repair of this story and system as
       
     Notes
@@ -237,7 +237,7 @@ def fn_calc_system_repair_time(damage, repair_type, systems, max_workers_per_bui
         
         # Limit the number of crews based on the space limitations at this story
         # and the assumed crew size
-        worker_upper_lim = np.minimum(max_workers_per_story , max_workers_per_building)
+        worker_upper_lim = np.fmin(max_workers_per_story , max_workers_per_building)
         max_num_crews_per_story = np.fmax(np.floor(worker_upper_lim / average_crew_size), 1)
         num_crews = np.fmin(num_crews, max_num_crews_per_story) 
         
@@ -587,13 +587,11 @@ def fn_allocate_workers_systems(systems, sys_repair_days, sys_crew_size,
         # every story. Need to update for taller buildings which could start
         # next sequence on lower story once previous sequence was far enough
         # along
-        # available_workers = min(max(max_workers_per_story),max_workers_per_building)*ones(num_reals, 1);  % currently assumes all stories have the same crew size limitation (uniform sq ft for each story)
         available_workers = max_workers_per_building * np.ones(num_reals)
         
         # Define what systems are waiting to begin repairs
         sys_blocked = np.zeros([num_reals,num_sys]).astype(bool)
         sys_incomplete = priority_sys_repair_days > 0
-        # constraining_systems = unique(priority_sys_constraint_matrix(priority_sys_constraint_matrix ~=0));
         for s in range(num_sys): # Loop over each system that may constrain something
             constrained_systems = priority_sys_constraint_matrix == s+1 # These systems are constrained by looped system #FZ# s+1 is done to correlate with +1 done in deriving constraint matrix
             constraining_sys_filt = sys_idx_priority_matrix == s; # location in matrix of this system
@@ -615,7 +613,7 @@ def fn_allocate_workers_systems(systems, sys_repair_days, sys_crew_size,
         for s in range(num_sys):
             # Assign Workers to this systems
             enough_workers = required_workers[:,s] <= available_workers
-            assigned_workers[enough_workers,s] = np.minimum(required_workers[enough_workers,s], available_workers[enough_workers])
+            assigned_workers[enough_workers,s] = np.fmin(required_workers[enough_workers,s], available_workers[enough_workers])
     
             # Define Available Workers
             # when in series limit available workers to the workers in this system 
@@ -634,17 +632,12 @@ def fn_allocate_workers_systems(systems, sys_repair_days, sys_crew_size,
         total_repair_days[in_progress] = priority_sys_repair_days[in_progress]
         total_waiting_days = priority_sys_waiting_days.copy()   #FZ# Check is.copy() worke here
         
-        #FZ##### the problem is here. Check
         total_waiting_days[total_waiting_days == 0] = np.inf # Convert zeros to inf such that zeros are not included in the min in the next step
         
-        total_time = np.minimum(total_repair_days,total_waiting_days) # combime repair time and waiting time
+        total_time = np.fmin(total_repair_days,total_waiting_days) # combime repair time and waiting time
         delta_days = np.amin(total_time,axis=1) # time increment is whatever in-progress story that finishes first
         delta_days[np.isinf(delta_days)] = 0 # Replace infs from real that has no repair with zero
-        
-        #FZ# Additional code added to correct the issue with 0 being replaced with infinity in priority_sys_waiting_days and priority_sys_impeding_factors
-        # priority_sys_waiting_days[priority_sys_waiting_days == np.inf] = 0
-        # priority_sys_impeding_factors[priority_sys_impeding_factors == np.inf] = 0    
-        
+                 
         # Reduce waiting time
         priority_sys_waiting_days = np.maximum(np.transpose(np.transpose(priority_sys_waiting_days) - delta_days), 0) #FZ# transpose done to align arrays for the operation
         
@@ -712,8 +705,15 @@ def fn_restructure_repair_schedule( damage, system_schedule,
      contains per damage state damage and loss data for each component in
      the building, including repair schedule data.
     
-    Notes
-    -----'''
+    % Notes
+    -----
+    In the repair start day outputs:
+       - Zero = Starts immediately
+       - NaN = Repairs never started (because not damaged, has no temp repair, or controlled by red tag)
+    In the repair complete day outputs:
+       - NaN = No damage (or controlled by red tag)
+       - Inf = Is damaged, but has no System/RepairClass assignment (or no temp repair)'''
+    
     import sys
     
     ## Initialize Parameters
@@ -758,7 +758,7 @@ def fn_restructure_repair_schedule( damage, system_schedule,
         # Do not perform temporary repairs when building is red tagged
         if np.logical_and(repair_type == 'temp', np.any(simulated_red_tags)):
             story_start_day[simulated_red_tags.astype(bool),:] = np.nan
-            story_complete_day[simulated_red_tags.astype(bool),:] = np.inf
+            story_complete_day[simulated_red_tags.astype(bool),:] = np.nan
    
         # Re-distribute to each tenant unit
         sys_filt = damage['comp_ds_table'][system_var] == systems['id'][syst] # identifies which ds idices are in this seqeunce  

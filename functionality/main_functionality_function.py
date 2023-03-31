@@ -37,19 +37,30 @@ def main_functionality(damage, building_model, damage_consequences,
     ## Import Packages
     from functionality import fn_calculate_reoccupancy
     from functionality import fn_calculate_functionality
-    
+    from functionality import fn_check_habitability
     ## Calaculate Building Functionality Restoration Curves
     # Downtime including external delays
     recovery = {}
-    recovery['reoccupancy'] = fn_calculate_reoccupancy.fn_calculate_reoccupancy(damage, damage_consequences, utilities,
-        building_model, subsystems, functionality_options, tenant_units, impeding_temp_repairs)
+    reoc_meta = {}
+    recovery['reoccupancy'], reoc_meta['recovery_day'], reoc_meta['comp_breakdowns'] = fn_calculate_reoccupancy.fn_calculate_reoccupancy(damage, damage_consequences, utilities,
+        building_model, functionality_options, tenant_units, impeding_temp_repairs)
     
-    recovery['functional'] =  fn_calculate_functionality.fn_calculate_functionality(damage, damage_consequences, utilities,
-        building_model, subsystems, recovery['reoccupancy'], functionality_options, tenant_units)
+    func_meta = {}
+    recovery['functional'], func_meta['recovery_day'], func_meta['comp_breakdowns'] =  fn_calculate_functionality.fn_calculate_functionality(damage, damage_consequences, utilities,
+        building_model, subsystems, recovery['reoccupancy'], functionality_options, tenant_units, impeding_temp_repairs)
     
     # # delete all the extra per-realization data
     del recovery['reoccupancy']['breakdowns']['component_breakdowns_all_reals']
     del recovery['functional']['breakdowns']['component_breakdowns_all_reals']
     
+    
+    ## Habitability Checks
+    # Overwrite reocuppancy with additional checks from the functionality check
+    if 'habitability_requirements' in functionality_options.keys():
+        recovery['reoccupancy'] = fn_check_habitability.fn_check_habitability(damage, 
+                                                        damage_consequences, 
+                                                        reoc_meta, func_meta, 
+                                                        functionality_options['habitability_requirements'])
+ 
     return recovery
 

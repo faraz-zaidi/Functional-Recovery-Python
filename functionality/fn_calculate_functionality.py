@@ -1,7 +1,7 @@
 
 def fn_calculate_functionality(damage, damage_consequences, utilities, 
                                building_model, subsystems, reoccupancy, 
-                               functionality_options, tenant_units):
+                               functionality_options, tenant_units, impeding_temp_repairs):
     '''Calcualte the loss and recovery of building functionality based on global building
     damage, local component damage, and extenernal factors
 
@@ -26,6 +26,9 @@ def fn_calculate_functionality(damage, damage_consequences, utilities,
      recovery time optional inputs such as various damage thresholds
     tenant_units: DataFrame
      attributes of each tenant unit within the building
+    impeding_temp_repairs: dictionary
+     contains simulated temporary repairs the impede occuapancy and function
+     but are calulated in parallel with the temp repair schedule
     
     Returns
     -------
@@ -49,8 +52,8 @@ def fn_calculate_functionality(damage, damage_consequences, utilities,
     ## Define the day each system becomes functionl - Tenant level
     recovery_day = {}
     comp_breakdowns = {}
-    recovery_day['tenant_function'], comp_breakdowns['tenant_function'] = other_functionality_functions.fn_tenant_function( damage,
-        building_model, system_operation_day, utilities, subsystems, tenant_units)
+    recovery_day['tenant_function'], comp_breakdowns['tenant_function'] = other_functionality_functions.fn_tenant_function(damage,
+        building_model, system_operation_day, utilities, subsystems, tenant_units, impeding_temp_repairs)
     
     ## Combine Checks to determine per unit functionality
     # Each tenant unit is functional only if it is occupiable
@@ -62,16 +65,16 @@ def fn_calculate_functionality(damage, damage_consequences, utilities,
         day_tenant_unit_functional = np.fmax(day_tenant_unit_functional, recovery_day['tenant_function'][fault_tree_events[i]])
     
     ## Reformat outputs into functionality data strucutre
-    functional = other_functionality_functions.fn_extract_recovery_metrics( day_tenant_unit_functional,
+    functional = other_functionality_functions.fn_extract_recovery_metrics(day_tenant_unit_functional,
         recovery_day, comp_breakdowns, damage['comp_ds_table']['comp_id'], 
         damage_consequences['simulated_replacement'])
     
-    ## get the combined component breakdown
+    ## get the combined component breakdown between reoccupancy and function
     functional['breakdowns']['component_combined'] = other_functionality_functions.fn_combine_comp_breakdown(damage['comp_ds_table'], 
     functional['breakdowns']['perform_targ_days'], # assumes names are consistent in both objects
     functional['breakdowns']['comp_names'], # assumes names are consistent in both objects
     reoccupancy['breakdowns']['component_breakdowns_all_reals'],
     functional['breakdowns']['component_breakdowns_all_reals'])
     
-    return functional
+    return functional, recovery_day, comp_breakdowns
 

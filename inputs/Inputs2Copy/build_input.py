@@ -205,6 +205,7 @@ def build_input(output_path):
                     'damages_envelope_seal' : [],
                     'obstructs_interior_space' : [],
                     'impairs_system_operation' : [],
+                    'causes_flooding' : [],
                     'fraction_area_affected' : [],
                     'area_affected_unit' : [],
                     'crew_size' : [],
@@ -295,6 +296,7 @@ def build_input(output_path):
         comp_ds_info['damages_envelope_seal'].append(ds_attr['damages_envelope_seal'][0])
         comp_ds_info['obstructs_interior_space'].append(ds_attr['obstructs_interior_space'][0])
         comp_ds_info['impairs_system_operation'].append(ds_attr['impairs_system_operation'][0])
+        comp_ds_info['causes_flooding'].append(ds_attr['causes_flooding'][0])
         comp_ds_info['fraction_area_affected'].append(ds_attr['fraction_area_affected'][0])
         comp_ds_info['area_affected_unit'].append(ds_attr['area_affected_unit'][0])
         comp_ds_info['crew_size'].append(ds_attr['crew_size'][0])

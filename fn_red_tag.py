@@ -8,9 +8,9 @@ def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement):
       flag to indicate whether on not to calculate red tags based on
       component damage. Typically assumed to be FALSE for small wood light
       frame type structures.
-    damage: struct
+    damage: dictionary
       contains per damage state damage and loss data for each component in the building
-    comps: struct
+    comps: dictionary
       data structure component population info
     simulated_replacement: array [num reals x 1]
       Time 
@@ -28,14 +28,6 @@ def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement):
     import numpy as np
     
     def simulate_tagging(damage, comps, sc_ids, sc_thresholds):
-    
-        # Simulate uncertainty in inspector threhsold
-        # [num_reals,~] = size(damage.story{1}.qnt_damaged_dir_1);
-        # sc_beta = [0.5 0.5 0.5 0.5];
-        # sc_mins = [0.05 0.05 0.05 0];
-        # sc_max = [0.75 0.75 0.75 0.75];
-        # p_inpsector = rand(num_reals,1); % Simulate inspector "conservatism"
-        # sc_sim = max(min(logninv(p_inpsector,log(sc_thresholds),sc_beta),sc_max),sc_mins);
         
         red_tag_impact = np.zeros(np.shape(damage['tenant_units'][0]['qnt_damaged'])) # num reals by num comp_ds
         
@@ -85,7 +77,6 @@ def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement):
                         sys_qty = np.nanmax(ser_qty, axis = 1)
                         sys_ratio = sys_dmg / sys_qty
                         sys_tag[:,sys] = sys_ratio > sc_thresholds[sc]
-                        # sys_tag[:,sys] = sys_ratio > sc_sim[:,sc] # when using simulated safety class thresholds
                         
                         '''Calculate the impact that each component has on red tag
                         (boolean, 1 = affects red tag, 0 = does not affect)

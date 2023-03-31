@@ -38,10 +38,10 @@ def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total,
     
     Returns
     -------
-    impedingFactors.time_sys: array [num_reals x num_sys]
+    impedingFactors['time_sys']: array [num_reals x num_sys]
       Simulated total impeding time for each system
     
-    impedingFactors.breakdown: Dictionary
+    impedingFactors['breakdown']: dictionary
       feilds: 'inspection', 'financing', 'eng_mob', 'design', 'permitting', 'contractor_mob'
       The simulated start day and complete day for each impeding factor,
       broken down per system where applicable
@@ -249,15 +249,30 @@ def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total,
     impeding_factors['temp_repair'] = {}
     impeding_factors['temp_repair']['time_sys'] = np.ceil(tmp_impede_sys)
     
+    ## Simulate impeding factors and temp repair that occur in parallel with temp repair schedule
     # Temporary scaffolding for falling hazards
-    prob_sim = np.random.rand(num_reals, 1)
+    prob_sim = np.random.rand(num_reals)
     x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
     scaffold_impede_time = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['scaffolding_lead_time']))) # always round up
-    prob_sim = np.random.rand(num_reals, 1) # repair time is not correlated to impedance time
+    prob_sim = np.random.rand(num_reals) # repair time is not correlated to impedance time
     x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
     scaffold_repair_time = np.exp(x_vals_std_n * beta + np.log(impedance_options['scaffolding_erect_time'])) 
     impeding_factors['temp_repair']['scaffold_day'] = np.ceil(scaffold_impede_time + scaffold_repair_time) # round up (dont resolve issue on the same day repairs are complete)   
-       
+    
+    # Door Unjamming
+    prob_sim = np.random.rand(num_reals)
+    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
+    impeding_factors['temp_repair']['door_racking_repair_day'] = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['door_racking_repair_day']))) # always round up
+    
+    # Interior Flooding
+    prob_sim = np.random.rand(num_reals)
+    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
+    impeding_factors['temp_repair']['flooding_cleanup_day'] = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['flooding_cleanup_day']))) # always round up
+    
+    prob_sim = np.random.rand(num_reals)
+    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
+    impeding_factors['temp_repair']['flooding_repair_day'] = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['flooding_repair_day']))) # always round up
+
     ## Format Impedance times for Gantt Charts                                                     
     # Full repair
     impeding_factors['breakdowns'] = {}
@@ -284,7 +299,7 @@ def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total,
         impeding_factors['breakdowns']['long_lead'][systems['name'][s]] = {'start_day' : start_day['long_lead'][:,s],
                                                                            'complete_day' : complete_day['long_lead'][:,s]}
     
-    # Temporary Repairs - hard coded fixed to 5 temp repair class
+    # Temporary Repairs
     impeding_factors['breakdowns']['temp'] = {}
     for tmp in range(len(tmp_repair_class)):
         impeding_factors['breakdowns']['temp'][tmp_repair_class['name_short'][tmp]] = {'start_day' : np.zeros(num_reals),

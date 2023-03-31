@@ -1,23 +1,23 @@
 import numpy as np
 
 def fn_populate_damage_per_tu(damage):
-# % Check to see if the damage.tenant_units variable has been defined. If
-# % not, assume its the same as damage.story. This assumption creates a 1:1
-# % coupling between stories and tenant_units (one tenant unit per story)
-# %
-# % Parameters
-# % ----------
-# % damage.story: array of struct
-# %   contains simulated per component and damage state damage info
-# %   disagregated by story
-# %
-# % Returns
-# % -------
-# %   contains simulated per component and damage state damage info
-# %   disagregated by tenant unit
-# %
+    
+    '''Check to see if the damage.tenant_units variable has been defined. If
+    not, assume its the same as damage.story. This assumption creates a 1:1
+    coupling between stories and tenant_units (one tenant unit per story)
+    
+    Parameters
+    ----------
+    damage['story']: dictionary
+    contains simulated per component and damage state damage info
+    disagregated by story
+    
+    Returns
+    -------
+    contains simulated per component and damage state damage info
+    disagregated by tenant unit'''
 
-## If tenant unit damage is not provided by the user, assume its the same as per story damage
+# If tenant unit damage is not provided by the user, assume its the same as per story damage
 
     if ('tenant_units' in damage.keys()) == False:
         damage['tenant_units'] = damage['story']
@@ -25,23 +25,23 @@ def fn_populate_damage_per_tu(damage):
     return damage
 
 def fn_simulate_damage_per_side(damage):
-    # % Simulate damage per side for the exterior falling hazard check, if not 
-    # % provided by the user. Component location within a story is typically not 
-    # % Provided in most PBEE assessments. Therefore, this script make the rough 
-    # % assumptions to distribute damage to 4 sides, randomly.
-    # %
-    # % Parameters
-    # % ----------
-    # % damage: struct
-    # %   contains simulated damage info and damage state attributes
-    # %
-    # % Returns
-    # % -------
-    # % damage: struct
-    # %   contains simulated damage info and damage state attributes
-    # %
+    '''Simulate damage per side for the exterior falling hazard check, if not 
+    provided by the user. Component location within a story is typically not 
+    Provided in most PBEE assessments. Therefore, this script make the rough 
+    assumptions to distribute damage to 4 sides, randomly.
     
-    ## Simulate damage per side, if not provided by the user
+    Parameters
+    ----------
+    damage: dictionary
+      contains simulated damage info and damage state attributes
+    
+    Returns
+    -------
+    damage: dictionary
+      contains simulated damage info and damage state attributes'''
+    
+    
+    # Simulate damage per side, if not provided by the user
     if ('qnt_damaged_side_1' in damage['tenant_units'][0].keys()) == False:
         num_reals = len(damage['tenant_units'][0]['qnt_damaged'])
         
@@ -57,32 +57,32 @@ def fn_simulate_damage_per_side(damage):
                 
     return damage
 
-def fn_create_fnc_filters( comp_ds_table ):
-    # % Define function filter arrays that allow rapid sampling of simulated
-    # % damage for use within the fault tree analysis
-    # %
-    # % Parameters
-    # % ----------
-    # % comp_ds_table: table
-    # %   various component attributes by damage state for each component 
-    # %   within the performance model. Can be populated from the 
-    # %   component_attribites.csv and damage_state_attribute_mapping.csv 
-    # %   databases in the static_tables directory.  Each row of the table 
-    # %   corresponds to each column of the simulated component damage arrays 
-    # %   within damage.tenant_units.
-    # %
-    # % Returns
-    # % -------
-    # % fnc_filters: struct of arrays
-    # %   each filter is a 1 x num_comp_ds array that can be used to sample
-    # %   select types of damage from the damage.tenant unit or damage.story
-    # %   simulated damage arrays.
-    # %
+def fn_create_fnc_filters(comp_ds_table):
+    '''Define function filter arrays that allow rapid sampling of simulated
+    damage for use within the fault tree analysis
+
+    Parameters
+    ----------
+    comp_ds_table: DataFrame
+      various component attributes by damage state for each component 
+      within the performance model. Can be populated from the 
+      component_attribites.csv and damage_state_attribute_mapping.csv 
+      databases in the static_tables directory.  Each row of the table 
+      corresponds to each column of the simulated component damage arrays 
+      within damage.tenant_units.
+
+    Returns
+    -------
+    fnc_filters: dictionary
+      each filter is a 1 x num_comp_ds array that can be used to sample
+      select types of damage from the damage['tenant unit'] or damage['story']
+      simulated damage arrays.'''
+
     
-    # %% Combine compoment attributes into recovery filters to expidite recovery assessment
-    # % combine all damage state filters that have the potential to affect
-    # % function or reoccupancy, other than structural safety damage (for repair
-    # % prioritization)
+    # Building level filters
+    '''combine all damage state filters that have the potential to affect
+    function or reoccupancy, other than structural safety damage (for repair
+    prioritization)'''
     
     
     # Convert damage['comp_ds_table'] lists to numpy arrays
@@ -102,8 +102,13 @@ def fn_create_fnc_filters( comp_ds_table ):
     # get any components that have the potential to cause red tag
     fnc_filters['red_tag'] = comp_ds_table['safety_class'] > 0
     
+    # Define when the building requires shoring from external falling hazards
     fnc_filters['requires_shoring'] = comp_ds_table['requires_shoring'].astype('bool')
     
+    # Define when the building has issues with internal flooding
+    fnc_filters['causes_flooding'] = comp_ds_table['causes_flooding'].astype('bool')
+    
+    ## System dependent filters
     # fire suppresion system damage that affects entire building
     fnc_filters['fire_building'] = np.logical_and(comp_ds_table['system'] == 9, np.logical_and(comp_ds_table['service_location'] == 'building' , comp_ds_table['impairs_system_operation'] == 1))
     
@@ -213,6 +218,10 @@ def fn_create_fnc_filters( comp_ds_table ):
     # HVAC: Exhaust
     fnc_filters['hvac']['tenant']['hvac_exhaust']['exhaust_fan'] = np.logical_and(comp_ds_table['system'] == 8, np.logical_and(comp_ds_table['subsystem_id'] == 18, comp_ds_table['impairs_system_operation'] == 1))
     
+    # Data system
+    fnc_filters['data_main'] = np.logical_and(comp_ds_table['system'] == 11, np.logical_and(comp_ds_table['subsystem_id'] == 25, np.logical_and(comp_ds_table['service_location'] == 'building', comp_ds_table['impairs_system_operation'] == 1)))
+    fnc_filters['data_unit'] = np.logical_and(comp_ds_table['system'] == 11, np.logical_and(comp_ds_table['subsystem_id'] == 26, np.logical_and(comp_ds_table['service_location'] == 'unit', comp_ds_table['impairs_system_operation'])))
+    
     return fnc_filters
 
     
@@ -227,19 +236,19 @@ def fn_simulate_temp_worker_days(damage, temp_repair_class, repair_time_options)
         
         Parameters
         ----------
-        damage: struct
+        damage: dictionary
           contains simulated damage info and damage state attributes
-        repair_time_options.allow_shoring: logical
+        repair_time_options['allow_shoring']: logical
           flag indicating whether or not shoring should be considered as a
           temporary repair for local stability issues for structural components
-        temp_repair_class: table
+        temp_repair_class: DataFrame
           attributes of each temporary repair class to consider
         
         Returns
         -------
-        damage: struct
+        damage: dictionary
           contains simulated damage info and damage state attributes
-        temp_repair_class: table
+        temp_repair_class: DataFrame
           attributes of each temporary repair class to consider'''
         
         
@@ -278,11 +287,11 @@ def fn_simulate_temp_worker_days(damage, temp_repair_class, repair_time_options)
             else:
                 tmp_worker_days_per_unit[:,c] = np.nan
 
-        # Simulate uncertainty in per unit temp repair times
-        # Assumes distribution is lognormal with beta = 0.4
-        # Assumes time to repair all of a given component group is fully correlated, 
-        # but independant between component groups 
-        # sim_tmp_worker_days_per_unit = lognrnd(log(tmp_worker_days_per_unit),0.4, len(tmp_worker_days_per_unit))
+        '''Simulate uncertainty in per unit temp repair times
+        Assumes distribution is lognormal with beta = 0.4
+        Assumes time to repair all of a given component group is fully correlated, 
+        but independant between component groups''' 
+        
         sim_tmp_worker_days_per_unit = np.random.lognormal(np.log(tmp_worker_days_per_unit), 0.4, np.shape(tmp_worker_days_per_unit))
         
         # Allocate per unit temp repair time among tenant units to calc worker days
@@ -297,19 +306,19 @@ def fn_define_door_racking(damage_consequences, num_stories):
     
     Parameters
     ----------
-    damage_consequences: struct
-      data structure containing simulated building consequences, such as red
+    damage_consequences: dictionary
+      dictionary containing simulated building consequences, such as red
       tags
     num_stories: int
       Integer number of stories in the building being assessed
     
     Returns
     -------
-    damage_consequences.racked_stair_doors_per_story: array, num real x num stories
+    damage_consequences['racked_stair_doors_per_story']: array, num real x num stories
       simulated number of racked stairwell doors at each story
-    damage_consequences.racked_entry_doors_side_1: array, num real x 1
+    damage_consequences['racked_entry_doors_side_1']: array, num real x 1
       simulated number of racked entry doors on one side of the building
-    damage_consequences.racked_entry_doors_side_2: array, num real x 1
+    damage_consequences['racked_entry_doors_side_2']: array, num real x 1
       simulated number of racked entry doors on the other side of the building'''
     
     ## Set door racking damage if not provided by user

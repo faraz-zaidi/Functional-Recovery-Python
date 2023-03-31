@@ -50,6 +50,7 @@ def main_plot_functionality(functionality, save_dir, p_gantt, systems):
     fr_time = np.array(functionality['recovery']['functional']['building_level']['recovery_day'])
     if len(np.where(fr_time == np.percentile(fr_time,p_gantt))[0])>0:
         p_idx = np.where(fr_time == np.percentile(fr_time,p_gantt))[0][0] # Find the index of the first realization that matches the selected percentile
+        
     else:
         diff = abs(fr_time - np.percentile(fr_time,p_gantt))
         p_idx = np.where(diff == min(diff))[0][0]

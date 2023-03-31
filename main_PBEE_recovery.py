@@ -10,36 +10,47 @@ def main_PBEE_recovery(damage, damage_consequences, building_model,
     ----------
     damage: struct
       contains per damage state damage and loss data for each component in the building
-    damage_consequences: struct
-      data structure containing simulated building consequences, such as red
+    
+    damage_consequences: dictionary
+      dictionary containing simulated building consequences, such as red
       tags and repair costs ratios
-    building_model: struct
+    
+    building_model: dictionary
       general attributes of the building model
-    tenant_units: table
+   
+    tenant_units: DataFrame
       attributes of each tenant unit within the building
-    systems: table
+    
+    systems: DataFrame
       data table containing information about each system's attributes
-    subsystems: table
+    
+    subsystems: DataFrame
       attributes of building subsystems; data provided in static tables
       directory
-    tmp_repair_class: table
+    
+    tmp_repair_class: DataFrame
       data table containing information about each temporary repair class
       attributes. Attributes are similar to those in the systems table.
-    impedance_options: struct
+    
+    impedance_options: dictionary
       general impedance assessment user inputs such as mitigation factors
-    impeding_factor_medians: table
+    
+    impeding_factor_medians: DataFrame
       median delays for various impeding factors
-    repair_time_options: struct
+    
+    repair_time_options: dictionary
       general repair time options such as mitigation factors
-    functionality.utilities
-      data structure containing simulated utility downtimes
-    functionality_options: struct
+    
+    functionality['utilities']
+      dictionary containing simulated utility downtimes
+    
+    functionality_options: dictionary
       recovery time optional inputs such as various damage thresholds
     
     
     Returns
     -------
-    functionality: struct
+    functionality: dictionary
       contains data on the recovery of tenant- and building-level function, 
       recovery trajectorires, and contributions from systems and components, 
       simulated repair schedule breakdowns and impeding times.'''
@@ -75,12 +86,12 @@ def main_PBEE_recovery(damage, damage_consequences, building_model,
                                           building_model['building_value'], 
                                           impeding_factor_medians)
     
-    # ## Construct the Building Repair Schedule
+    ## Construct the Building Repair Schedule
     damage, functionality['worker_data'], functionality['building_repair_schedule'] = main_repair_schedule.main_repair_schedule(damage, building_model, damage_consequences['red_tag'], 
         repair_time_options, systems, tmp_repair_class, functionality['impeding_factors'], 
         damage_consequences['simulated_replacement'])
     
-    # Calculate the Recovery of Building Reoccupancy and Function
+    ## Calculate the Recovery of Building Reoccupancy and Function
     functionality['recovery'] = main_functionality_function.main_functionality(damage, building_model, 
                                 damage_consequences, functionality['utilities'], 
                                 functionality_options, tenant_units, subsystems, 

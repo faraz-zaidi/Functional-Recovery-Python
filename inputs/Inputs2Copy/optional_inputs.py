@@ -44,41 +44,54 @@ optional_inputs = {
                             "site_pga" : 1,
                             "pga_de": 1
                             },
+
 "scaffolding_lead_time" : 5,
 "scaffolding_erect_time" : 2,
-               
+"door_racking_repair_day" : 3,
+"flooding_cleanup_day" : 5,
+"flooding_repair_day" : 90
                             },
                       
 
 # Repir Schedule Options
 "repair_time_options" : {
-                        "max_workers_per_sqft_story"  : 0.001,
-                        "max_workers_per_sqft_story_temp_repair"  : 0.005,
-                        "max_workers_per_sqft_building" : 0.00025,
-                        "max_workers_building_min" :  20,
-                        "max_workers_building_max" :  260,
-                        "allow_tmp_repairs" : 1,
-                        "allow_shoring" : 1
-                       },
+    
+ "max_workers_per_sqft_story"  : 0.001,
+ "max_workers_per_sqft_story_temp_repair"  : 0.005,
+ "max_workers_per_sqft_building" : 0.00025,
+ "max_workers_building_min" :  20,
+ "max_workers_building_max" :  260,
+ "allow_tmp_repairs" : 1,
+ "allow_shoring" : 1
+                         },
 
 # Functionality Assessment Options
 "functionality_options" : {  
-                       "calculate_red_tag" : 1,
-                       "red_tag_clear_time" : 7,
-                       "red_tag_clear_beta" : 0.6,
-                       "include_local_stability_impact" : 1,
-                       "door_racking_repair_day" : 3,
-                       "egress_threshold" : 0.5,
-                       "fire_watch" : True,
-                       "local_fire_damamge_threshold" : 0.25,
-                       "min_egress_paths" : 2,
-                       "exterior_safety_threshold" : 0.1,
-                       "interior_safety_threshold" : 0.25,
-                       "door_access_width_ft" : 9,
-                       "heat_utility" : 'gas'
-                       },
+    
+"calculate_red_tag" : 1,
+"red_tag_clear_time" : 7,
+"red_tag_clear_beta" : 0.6,
+"include_local_stability_impact" : 1,
+"egress_threshold" : 0.5,
+"fire_watch" : True,
+"local_fire_damamge_threshold" : 0.25,
+"min_egress_paths" : 2,
+"exterior_safety_threshold" : 0.1,
+"interior_safety_threshold" : 0.25,
+"door_access_width_ft" : 9,
+"heat_utility" : 'gas',
+"habitability_requirements": {"electrical" : 0,
+                             "water_potable" : 0,
+                             "water_sanitary" : 0,
+                             "hvac_ventilation" : 0,
+                             "hvac_heating" : 0,
+                             "hvac_cooling" : 0,
+                             "hvac_exhaust" : 0                       
+                             },
+                        }
 
-}
+                }
+
 
 with open("optional_inputs.json", "w") as outfile:
     json.dump(optional_inputs, outfile)

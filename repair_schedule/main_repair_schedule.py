@@ -130,7 +130,7 @@ def main_repair_schedule(damage, building_model, simulated_red_tags,
     for tu in range(len(full_damage)):
         damage['tenant_units'][tu]['recovery'] = full_damage[tu]
         # Repair time is the lesser of the full repair and temp repair times
-        damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'] = np.minimum(damage['tenant_units'][tu]['recovery']['repair_complete_day'],
+        damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'] = np.fmin(damage['tenant_units'][tu]['recovery']['repair_complete_day'],
                                                                                   tmp_damage[tu]['repair_complete_day'])
         
         # Temporary Repair Times control if temporary repair times are less than the full repair time

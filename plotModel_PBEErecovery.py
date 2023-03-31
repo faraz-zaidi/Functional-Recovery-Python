@@ -40,6 +40,6 @@ def plot_results(model_name):
 
 if __name__ == '__main__':
 
-    model_name = 'haseltonRCMF_12story'
+    model_name = 'ICSB'
 
     plot_results(model_name)
