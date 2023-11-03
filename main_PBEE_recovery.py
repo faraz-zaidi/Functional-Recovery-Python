@@ -71,7 +71,7 @@ def main_PBEE_recovery(damage, damage_consequences, building_model,
     ## Calculate Red Tags
     RT, RTI, IT = fn_red_tag(functionality_options['calculate_red_tag'], 
                                     damage, building_model['comps'],
-                                    np.array(damage_consequences['simulated_replacement']))
+                                    np.array(damage_consequences['simulated_replacement_time']))
     
     damage_consequences['red_tag'] = RT 
     damage_consequences['red_tag_impact'] = RTI 
@@ -84,12 +84,13 @@ def main_PBEE_recovery(damage, damage_consequences, building_model,
                                           damage_consequences['inspection_trigger'],
                                           systems, tmp_repair_class, 
                                           building_model['building_value'], 
-                                          impeding_factor_medians)
+                                          impeding_factor_medians,
+                                          functionality_options['include_flooding_impact'])
     
     ## Construct the Building Repair Schedule
     damage, functionality['worker_data'], functionality['building_repair_schedule'] = main_repair_schedule.main_repair_schedule(damage, building_model, damage_consequences['red_tag'], 
         repair_time_options, systems, tmp_repair_class, functionality['impeding_factors'], 
-        damage_consequences['simulated_replacement'])
+        damage_consequences['simulated_replacement_time'])
     
     ## Calculate the Recovery of Building Reoccupancy and Function
     functionality['recovery'] = main_functionality_function.main_functionality(damage, building_model, 

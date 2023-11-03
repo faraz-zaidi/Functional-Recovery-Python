@@ -1,4 +1,4 @@
-def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement):
+def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement_time):
     '''Perform the ATC-138 functional recovery time assessement given similation
     of component damage for a single shaking intensity
     
@@ -12,7 +12,7 @@ def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement):
       contains per damage state damage and loss data for each component in the building
     comps: dictionary
       data structure component population info
-    simulated_replacement: array [num reals x 1]
+    simulated_replacement_time: array [num reals x 1]
       Time 
     
     Returns
@@ -131,7 +131,7 @@ def fn_red_tag( calculate_red_tag, damage, comps, simulated_replacement):
     
     
     # Account for global red tag cases
-    replace_case = np.logical_not(np.isnan(np.array(simulated_replacement)))
+    replace_case = np.logical_not(np.isnan(np.array(simulated_replacement_time)))
     red_tag[replace_case] = 1
     
     return red_tag, red_tag_impact, inspection_tag

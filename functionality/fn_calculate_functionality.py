@@ -53,7 +53,7 @@ def fn_calculate_functionality(damage, damage_consequences, utilities,
     recovery_day = {}
     comp_breakdowns = {}
     recovery_day['tenant_function'], comp_breakdowns['tenant_function'] = other_functionality_functions.fn_tenant_function(damage,
-        building_model, system_operation_day, utilities, subsystems, tenant_units, impeding_temp_repairs)
+        building_model, system_operation_day, subsystems, tenant_units, impeding_temp_repairs, functionality_options)
     
     ## Combine Checks to determine per unit functionality
     # Each tenant unit is functional only if it is occupiable
@@ -67,7 +67,7 @@ def fn_calculate_functionality(damage, damage_consequences, utilities,
     ## Reformat outputs into functionality data strucutre
     functional = other_functionality_functions.fn_extract_recovery_metrics(day_tenant_unit_functional,
         recovery_day, comp_breakdowns, damage['comp_ds_table']['comp_id'], 
-        damage_consequences['simulated_replacement'])
+        damage_consequences['simulated_replacement_time'])
     
     ## get the combined component breakdown between reoccupancy and function
     functional['breakdowns']['component_combined'] = other_functionality_functions.fn_combine_comp_breakdown(damage['comp_ds_table'], 

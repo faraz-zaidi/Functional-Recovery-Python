@@ -78,11 +78,10 @@ def fn_create_fnc_filters(comp_ds_table):
       select types of damage from the damage['tenant unit'] or damage['story']
       simulated damage arrays.'''
 
+
+
     
-    # Building level filters
-    '''combine all damage state filters that have the potential to affect
-    function or reoccupancy, other than structural safety damage (for repair
-    prioritization)'''
+
     
     
     # Convert damage['comp_ds_table'] lists to numpy arrays
@@ -94,6 +93,20 @@ def fn_create_fnc_filters(comp_ds_table):
         comp_ds_table[key] = np.array(comp_ds_table[key])
         
     fnc_filters = {}  
+
+
+    ## Impedance filters
+    # fnc_filters['permit_rapid'] = strcmp(comp_ds_table.permit_type, 'rapid');
+    # fnc_filters.permit_full = strcmp(comp_ds_table.permit_type, 'full');
+    # fnc_filters.redesign = comp_ds_table.redesign == 1;
+    fnc_filters['permit_rapid'] = comp_ds_table['permit_type'] == 'rapid'
+    fnc_filters['permit_full'] = comp_ds_table['permit_type'] == 'full'
+    fnc_filters['redesign'] = comp_ds_table['redesign'] == 1   
+    
+    # Building level filters
+    '''combine all damage state filters that have the potential to affect
+    function or reoccupancy, other than structural safety damage (for repair
+    prioritization)'''
     
     fnc_filters['affects_reoccupancy'] = comp_ds_table['affects_envelope_safety'].astype('bool') | comp_ds_table['ext_falling_hazard'].astype('bool')  | comp_ds_table['int_falling_hazard'].astype('bool')  | comp_ds_table['global_hazardous_material'].astype('bool')  | comp_ds_table['local_hazardous_material'].astype('bool') | comp_ds_table['affects_access'].astype('bool')
     fnc_filters['affects_function'] = fnc_filters['affects_reoccupancy'] | comp_ds_table['damages_envelope_seal'].astype('bool') | comp_ds_table['obstructs_interior_space'].astype('bool') | comp_ds_table['impairs_system_operation'].astype('bool') 
@@ -219,8 +232,11 @@ def fn_create_fnc_filters(comp_ds_table):
     fnc_filters['hvac']['tenant']['hvac_exhaust']['exhaust_fan'] = np.logical_and(comp_ds_table['system'] == 8, np.logical_and(comp_ds_table['subsystem_id'] == 18, comp_ds_table['impairs_system_operation'] == 1))
     
     # Data system
-    fnc_filters['data_main'] = np.logical_and(comp_ds_table['system'] == 11, np.logical_and(comp_ds_table['subsystem_id'] == 25, np.logical_and(comp_ds_table['service_location'] == 'building', comp_ds_table['impairs_system_operation'] == 1)))
-    fnc_filters['data_unit'] = np.logical_and(comp_ds_table['system'] == 11, np.logical_and(comp_ds_table['subsystem_id'] == 26, np.logical_and(comp_ds_table['service_location'] == 'unit', comp_ds_table['impairs_system_operation'])))
+    fnc_filters['data_main'] = np.logical_and(comp_ds_table['system'] == 11, np.logical_and(comp_ds_table['service_location'] == 'building', comp_ds_table['impairs_system_operation'] == 1))
+    fnc_filters['data_unit'] = np.logical_and(comp_ds_table['system'] == 11, np.logical_and(comp_ds_table['service_location'] == 'unit', comp_ds_table['impairs_system_operation'] ==1))
+    
+    # Horizontal Egress: Fire break partitions
+    fnc_filters['fire_break'] = np.logical_and(comp_ds_table['system'] == 3, comp_ds_table['weakens_fire_break'] == 1) # only collect interior fire break partitions
     
     return fnc_filters
 
@@ -322,7 +338,7 @@ def fn_define_door_racking(damage_consequences, num_stories):
       simulated number of racked entry doors on the other side of the building'''
     
     ## Set door racking damage if not provided by user
-    num_reals = len(damage_consequences['simulated_replacement'])
+    num_reals = len(damage_consequences['simulated_replacement_time'])
     
     # Assume there are no racked doors if not specified by the user
     if ('racked_stair_doors_per_story' in damage_consequences.keys()) == False:

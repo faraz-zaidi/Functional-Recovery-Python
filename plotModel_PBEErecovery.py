@@ -7,7 +7,7 @@ def plot_results(model_name):
     model_name: string
         Name of the model. Inputs are expected to be in a directory with this 
         name. Outputs will save to a directory with this name
-
+    
     """
     import os
     import json
@@ -17,7 +17,7 @@ def plot_results(model_name):
     # Plot Functional Recovery Plots For a Single Model and Single Intensity
     
     ## Define User inputs
-
+    
     # Load systems information
     systems = pd.read_csv(os.path.join(os.path.dirname(__file__), 'static_tables', 'systems.csv'))
     systems = systems['name']

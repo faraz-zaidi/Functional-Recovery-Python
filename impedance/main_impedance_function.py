@@ -1,7 +1,7 @@
 def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total, 
                           repair_cost_ratio_engineering, inspection_trigger, 
                           systems, tmp_repair_class, building_value, 
-                          impeding_factor_medians):
+                          impeding_factor_medians, include_flooding_impact):
 
     '''Calculate ATC-138 impeding times for each system given simulation of damage
     
@@ -95,16 +95,13 @@ def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total,
 
 
     ## Parse through damage to determine which systems require repair
-    rapid_permit_filt = np.array(damage['comp_ds_table']['permit_type']) == 'rapid'
-    full_permiting_filt = np.array(damage['comp_ds_table']['permit_type']) == 'full'
-    redesign_filt = np.array(damage['comp_ds_table']['redesign']) == 1
-    
     
     sys_repair_trigger = {
         'any': np.zeros([num_reals, num_sys]),
         'rapid_permit' : np. zeros([num_reals, num_sys]),
         'full_permit' : np.zeros([num_reals, num_sys]),
         'redesign' : np. zeros([num_reals, num_sys]),
+        'flooding' : np. zeros(num_reals)
         }
     for sys in range(num_sys):
         sys_filt = np.array(damage['comp_ds_table']['system']) == sys+1 #FZ +1 is done to coorrelate with python indexing starting from 0. 
@@ -115,16 +112,18 @@ def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total,
             sys_repair_trigger['any'][:,sys] = np.maximum(sys_repair_trigger['any'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , 1*(sys_filt) )), axis=1))
             
             # Track if any damage exists that requires rapid permit per system
-            sys_repair_trigger['rapid_permit'][:,sys] = np.maximum(sys_repair_trigger['rapid_permit'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(rapid_permit_filt)))), axis=1))
+            sys_repair_trigger['rapid_permit'][:,sys] = np.maximum(sys_repair_trigger['rapid_permit'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(damage['fnc_filters']['permit_rapid'])))), axis=1))
             
             # Track if any damage exists that requires full permit per system
-            sys_repair_trigger['full_permit'][:,sys] = np.maximum(sys_repair_trigger['full_permit'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(full_permiting_filt)))), axis=1))            
+            sys_repair_trigger['full_permit'][:,sys] = np.maximum(sys_repair_trigger['full_permit'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(damage['fnc_filters']['permit_full'])))), axis=1))            
             
             # Track if any systems require redesign
-            sys_repair_trigger['redesign'][:,sys] = np.maximum(sys_repair_trigger['redesign'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(redesign_filt)))), axis=1))         
+            sys_repair_trigger['redesign'][:,sys] = np.maximum(sys_repair_trigger['redesign'][:,sys] , np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(damage['fnc_filters']['redesign'])))), axis=1))         
 
-
-   # other_impedance_functions.
+            # Track if any damage exists that triggers flooding
+            sys_repair_trigger['flooding'] = np.maximum(sys_repair_trigger['flooding'], np.amax((np.multiply( 1*(is_damaged) , ( 1*(sys_filt) & 1*(damage['fnc_filters']['causes_flooding'])))), axis=1)) 
+    
+    # other_impedance_functions.
     # Simulate impedance time for each impedance factor 
         
     if impedance_options['include_impedance']['inspection'] == True:
@@ -265,13 +264,22 @@ def main_impeding_factors(damage, impedance_options, repair_cost_ratio_total,
     impeding_factors['temp_repair']['door_racking_repair_day'] = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['door_racking_repair_day']))) # always round up
     
     # Interior Flooding
-    prob_sim = np.random.rand(num_reals)
-    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
-    impeding_factors['temp_repair']['flooding_cleanup_day'] = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['flooding_cleanup_day']))) # always round up
     
-    prob_sim = np.random.rand(num_reals)
-    x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
-    impeding_factors['temp_repair']['flooding_repair_day'] = np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['flooding_repair_day']))) # always round up
+    if include_flooding_impact == 1:
+        # Flooding Cleanup
+        prob_sim = np.random.rand(num_reals)
+        x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
+        impeding_factors['temp_repair']['flooding_cleanup_day'] = sys_repair_trigger['flooding'] * np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['flooding_cleanup_day']))) # always round up
+    
+        # Repair Flooding Damage
+        prob_sim = np.random.rand(num_reals)
+        x_vals_std_n = trunc_pd.ppf(prob_sim) # Truncated lognormal distribution (via standard normal simulation)
+        impeding_factors['temp_repair']['flooding_repair_day'] = sys_repair_trigger['flooding'] * np.ceil(surge_factor * np.exp(x_vals_std_n * beta + np.log(impedance_options['flooding_repair_day']))) # always round up
+
+
+    else: # zero out the flooding impedance (cleanup and repair)
+        impeding_factors['temp_repair']['flooding_cleanup_day'] = np.zeros(num_reals)
+        impeding_factors['temp_repair']['flooding_repair_day'] = np.zeros(num_reals)
 
     ## Format Impedance times for Gantt Charts                                                     
     # Full repair

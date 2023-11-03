@@ -38,8 +38,6 @@ def run_analysis(model_name):
     import math
     import pandas as pd
     from scipy.stats import truncnorm
-    
-    # model_name = 'ICSB'
      
     ## 2. Define User Inputs
     model_dir = 'inputs/example_inputs/'+model_name # Directory where the simulated inputs are located
@@ -77,8 +75,6 @@ def run_analysis(model_name):
         bldg_comps_story.append(building_model['comps']['story'][str(s)])
         
     building_model['comps']['story'] = bldg_comps_story
-       
-    tenant_units['is_data_required'] = list(np.zeros(len(tenant_units['id']))) # temp zero out data requirement
     
     ## 4. Load required static data
     systems = pd.read_csv(os.path.join(os.path.dirname(__file__), 'static_tables', 'systems.csv'))
@@ -109,7 +105,7 @@ def run_analysis(model_name):
     if os.path.exists(os.path.join(os.path.dirname(__file__),'outputs', model_name)) == False:
         os.mkdir(os.path.join(os.path.dirname(__file__),'outputs', model_name))
     
-      # Covert arrays to list for writing to json file   
+    # Covert arrays to list for writing to json file   
     fnc_keys_1 = list(functionality.keys())
     for k_1 in fnc_keys_1:
         if type(functionality[k_1]) == np.ndarray: 
@@ -148,6 +144,7 @@ def run_analysis(model_name):
     
     end_time = time.time()
     
+    print('Recovery assessment of model ' + model_name + ' complete')
     print('time to run '+str(round(end_time - start_time,2))+'s')
     
     

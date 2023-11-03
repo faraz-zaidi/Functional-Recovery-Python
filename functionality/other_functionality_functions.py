@@ -210,7 +210,8 @@ def fn_building_safety(damage, building_model, damage_consequences, utilities,
             day_repair_fall_haz[:,d] = day_repair_fall_haz[:,d] + affects_door * delta_day
     
             # Add days to components that are affecting occupancy
-            fall_haz_comps_day_rep[:,:,:,d] = fall_haz_comps_day_rep[:,:,:,d] + ((comp_affected_area.transpose(2,0,1) * damage['fnc_filters']['ext_fall_haz_all'].reshape(1, num_comps)) * (affects_door * delta_day).reshape(num_reals,1)).transpose(1,2,0) #FZ# Transpose and reshape done to align nd arrays
+            comp_posing_falling_hazard = comp_affected_area > 0
+            fall_haz_comps_day_rep[:,:,:,d] = fall_haz_comps_day_rep[:,:,:,d] + ((1 * comp_posing_falling_hazard).transpose(2,0,1) * (affects_door * delta_day).reshape(num_reals,1)).transpose(1,2,0) #FZ# Transpose and reshape done to align nd arrays
         
         
         # Change the comps for the next increment
@@ -371,10 +372,25 @@ def fn_story_access(damage, building_model, damage_consequences,
     recovery_day['stairs'] = np.zeros([num_reals,num_units])
     recovery_day['stair_doors'] = np.zeros([num_reals,num_units])
     recovery_day['flooding'] = np.zeros([num_reals,num_units])
+    recovery_day['horizontal_egress'] = np.zeros([num_reals,num_units])
     comp_breakdowns['stairs'] = np.zeros([num_reals,num_comps,num_units])
     comp_breakdowns['flooding'] = np.zeros([num_reals,num_comps,num_units])
+    comp_breakdowns['horizontal_egress'] = np.zeros([num_reals,num_comps,num_units])
     
-    # Go through each story and check if there is sufficient story access (stairs and stairdoors)
+    
+    ## Horizontal Egress - Fire breaks
+    if any(damage['fnc_filters']['fire_break']):
+        for tu in range(num_stories):
+            # Grab tenant and damage info for this tenant unit
+            repair_complete_day_w_tmp = damage['tenant_units'][tu]['recovery']['repair_complete_day_w_tmp'].copy()
+    
+            # Any significant damage to fire breaks in the story impairs the horizontal egress
+            recovery_day['horizontal_egress'][:,tu] = np.fmax(recovery_day['horizontal_egress'][:,tu], np.nanmax(repair_complete_day_w_tmp[:, damage['fnc_filters']['fire_break']], axis=1))
+    
+            # Componet Breakdowns
+            comp_breakdowns['horizontal_egress'][:,:,tu] = damage['fnc_filters']['fire_break'].reshape(1,num_comps) * repair_complete_day_w_tmp
+
+     
     ## STORY FLOODING
     for tu in reversed(range(num_stories)): # Go from top to bottom
         is_damaged = np.array(damage['tenant_units'][tu]['qnt_damaged']) > 0
@@ -387,13 +403,12 @@ def fn_story_access(damage, building_model, damage_consequences,
         # This story is not accessible if any story above has flooding
         recovery_day['flooding'][:,tu] = np.nanmax(np.column_stack((flooding_cleanup_day, recovery_day['flooding'][:,(tu+1):num_units])), axis=1)
 
-    
-   
+    # Go through each story and check if there is sufficient story access (stairs and stairdoors)
     ## STAIRS AND STAIRDOORS
     if num_stories == 1: 
         return recovery_day, comp_breakdowns # Re-occupancy of one story buildigns is not affected by stairway access
 
-    
+
     # Augment damage filters with door data
     damage['fnc_filters']['stairs'] = np.append(damage['fnc_filters']['stairs'], np.array([False]))
     damage['fnc_filters']['stair_doors'] = np.append(np.zeros(num_comps), 1).astype(dtype=bool)
@@ -875,19 +890,23 @@ def fn_building_level_system_operation( damage, damage_consequences,
     system_operation_day['building']['water_sanitary_main'] = np.nanmax(system_operation_day['comp']['water_sanitary_main'], axis=1) # any major damage fails the system for the whole building so take the max
     system_operation_day['building']['elevator_mcs'] = np.nanmax(system_operation_day['comp']['elevator_mcs'], axis=1) # any major damage fails the system for the whole building so take the max
     system_operation_day['building']['data_main'] = np.nanmax(system_operation_day['comp']['data_main'], axis=1)  # any major damage to the main equipment fails the system for the entire building
+   
     ## Account for External Utilities impact on system Operation
+    # Electricity
+    system_operation_day['building']['electrical_main'] = np.fmax(system_operation_day['building']['electrical_main'] , utilities['electrical'])
+   
     # Potable water
     system_operation_day['building']['water_potable_main'] = np.fmax(system_operation_day['building']['water_potable_main'], utilities['water'])
     
     # Assume hvac control runs on electricity and heating system runs on gas
-    system_operation_day['building']['hvac_control'] = np.fmax(system_operation_day['building']['hvac_control'], utilities['electrical'])
+    system_operation_day['building']['hvac_control'] = np.fmax(system_operation_day['building']['hvac_control'], system_operation_day['building']['electrical_main'])
     system_operation_day['building']['hvac_heating'] = np.fmax(system_operation_day['building']['hvac_heating'], utilities[functionality_options['heat_utility']])
 
     return system_operation_day
 
 
 def fn_tenant_function( damage, building_model, system_operation_day, 
-                        utilities, subsystems, tenant_units, impeding_temp_repairs):
+                        subsystems, tenant_units, impeding_temp_repairs, functionality_options):
     
     '''Check each tenant unit for damage that would cause that tenant unit 
     to not be functional
@@ -908,9 +927,6 @@ def fn_tenant_function( damage, building_model, system_operation_day,
       simulation number of days each component is affecting building system
       operations
     
-    utilities: dictionary
-      data structure containing simulated utility downtimes
-    
     subsystems: DataFrame
       data table containing information about each subsystem's attributes
     
@@ -921,6 +937,9 @@ def fn_tenant_function( damage, building_model, system_operation_day,
       contains simulated temporary repairs the impede occuapancy and function
       but are calulated in parallel with the temp repair schedule
     
+    functionality_options: dictionary
+      recovery time optional inputs such as various damage thresholds
+      
     Returns
     -------
     recovery_day: dictionary
@@ -978,6 +997,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         'hvac_cooling' : np.zeros([num_reals,num_units]),
         'hvac_heating' : np.zeros([num_reals,num_units]),
         'hvac_exhaust' : np.zeros([num_reals,num_units]),
+        'data' : np.zeros([num_reals,num_units]),
         }
     
     comp_breakdowns = {
@@ -992,6 +1012,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         'hvac_cooling' : np.zeros([num_reals,num_comps,num_units]),
         'hvac_heating' : np.zeros([num_reals,num_comps,num_units]),
         'hvac_exhaust' : np.zeros([num_reals,num_comps,num_units]),
+        'data' : np.zeros([num_reals,num_comps,num_units]),        
         }
     
     ## Go through each tenant unit, define system level performacne and determine tenant unit recovery time
@@ -1075,7 +1096,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
                 fixed_comps_filt = np.isnan(comps_day_repaired)
                 comps_quant_damaged[fixed_comps_filt] = 0
             
-            power_supply_recovery_day = np.fmax(np.fmax(system_operation_day['building']['elevator_mcs'], system_operation_day['building']['electrical_main']), utilities['electrical'])
+            power_supply_recovery_day = np.fmax(system_operation_day['building']['elevator_mcs'], system_operation_day['building']['electrical_main'])
             
             recovery_day['elevators'][:,tu] = np.fmax(elev_function_recovery_day, power_supply_recovery_day) # electrical system and utility
             power_supply_recovery_day_comp = np.fmax(system_operation_day['comp']['elevator_mcs'], system_operation_day['comp']['electrical_main'])
@@ -1279,6 +1300,15 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         # distribute effect to the components
         comp_breakdowns['water_potable'][:,:,tu] = np.fmax(system_operation_day['comp']['water_potable_main'], np.array(repair_complete_day) * damage['fnc_filters']['water_unit'])
         
+        # In taller buildings, water needs to be pumped to reach upper stories
+        #and therefore requires electrical power
+        if unit['story'] > functionality_options['water_pressure_max_story']:
+            electrical_failure_controls = system_operation_day['building']['electrical_main'] > recovery_day['water_potable'][:,tu]
+            recovery_day['water_potable'][:,tu] = np.fmax(recovery_day['water_potable'][:,tu], system_operation_day['building']['electrical_main'])
+            comp_breakdowns['water_potable'][:,:,tu] = np.fmax(comp_breakdowns['water_potable'][:,:,tu] * np.logical_not(electrical_failure_controls).reshape(num_reals,1), 
+                                                               system_operation_day['comp']['electrical_main'] * electrical_failure_controls.reshape(num_reals,1))
+        
+        
         ## Sanitary Waste System
         # determine effect on funciton at this tenant unit
         # any major damage to the branch pipes (small diameter) failes for this tenant unit
@@ -1297,20 +1327,16 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         # Does not consider effect of backup systems
         if unit['is_electrical_required'] == 1:
             # determine effect on funciton at this tenant unit
-            # any major damage to the unit level electrical equipment failes for this tenant unit
+            # any major damage to the unit level electrical equipment fails for this tenant unit
             tenant_sys_recovery_day = np.nanmax(np.array(repair_complete_day) * damage['fnc_filters']['electrical_unit'], axis=1)
             recovery_day['electrical'][:,tu] =np.fmax(system_operation_day['building']['electrical_main'], tenant_sys_recovery_day)
-            
-            # Consider effect of external water network
-            utility_repair_day = utilities['electrical']
-            recovery_day['electrical'] = np.fmax(recovery_day['electrical'], np.array(utility_repair_day).reshape(num_reals,1))
-            
+                      
             # distribute effect to the components
             comp_breakdowns['electrical'][:,:,tu] = np.fmax(system_operation_day['comp']['electrical_main'], np.array(repair_complete_day) * damage['fnc_filters']['electrical_unit'])
 
         ## HVAC System
         # HVAC: Control System
-        recovery_day_hvac_control = system_operation_day['building']['hvac_control']
+        recovery_day_hvac_control = system_operation_day['building']['hvac_control'] # Electrical power is counted in here
         comp_breakdowns_hvac_control = system_operation_day['comp']['hvac_control']
         
         dependancy = {}
@@ -1359,18 +1385,18 @@ def fn_tenant_function( damage, building_model, system_operation_day,
                                                   dependancy)    
 
         ## Data
-        if unit['is_data_required'] == 1:
+        if unit['is_data_required'] == 1 and any(damage['fnc_filters']['data_unit'] | damage['fnc_filters']['data_main']):
         # determine effect on funciton at this tenant unit
         # any major damage to the unit level electrical equipment fails for this tenant unit
             tenant_sys_recovery_day = np.nanmax(repair_complete_day * damage['fnc_filters']['data_unit'], axis=1)
             recovery_day['data'][:,tu] = np.fmax(system_operation_day['building']['data_main'], tenant_sys_recovery_day)
 
-            # Consider effect of external water network
-            power_supply_recovery_day = np.fmax(system_operation_day['building']['electrical_main'], np.array(utilities['electrical']).reshape(num_reals,1))
-            recovery_day['data'] = np.fmax(recovery_day['data'], power_supply_recovery_day)
+            # Consider effect of external power network
+                 
+            recovery_day['data'] = np.fmax(recovery_day['data'], system_operation_day['building']['electrical_main'].reshape(num_reals,1))
     
             # distribute effect to the components
-            comp_breakdowns.data[:,:,tu] = np.fmax(system_operation_day['comp']['data_main'], np.array(repair_complete_day) * damage['fnc_filters']['data_unit'])
+            comp_breakdowns['data'][:,:,tu] = np.fmax(system_operation_day['comp']['data_main'], np.array(repair_complete_day) * damage['fnc_filters']['data_unit'])
 
         ## Post process for tenant-specific requirements 
         # Zero out systems that are not required by the tenant
@@ -1439,7 +1465,7 @@ def fn_combine_comp_breakdown(comp_ds_table, perform_targ_days, comp_names, reoc
 
 def fn_extract_recovery_metrics( tenant_unit_recovery_day, 
                                  recovery_day, comp_breakdowns, comp_id, 
-                                 simulated_replacement):
+                                 simulated_replacement_time):
     '''Reformant tenant level recovery outcomes into outcomes at the building level, 
     system level, and compoennt level
     
@@ -1459,7 +1485,7 @@ def fn_extract_recovery_metrics( tenant_unit_recovery_day,
      state structure of the damage object. With of array is the same as the
      arrays in the comp_breakdowns structure
      
-    simulated_replacement: array [num_reals x 1]
+    simulated_replacement_time: array [num_reals x 1]
      simulated time when the building needs to be replaced, and how long it
      will take (in days). NaN represents no replacement needed (ie
      building will be repaired)
@@ -1500,7 +1526,7 @@ def fn_extract_recovery_metrics( tenant_unit_recovery_day,
     
     import numpy as np
     
-    recovery={'tenant_unit' : {}, 'building_level' : {}, 'recovery_trajectory' : {}, 'breakdowns' : {}}
+    recovery={'tenant_unit' : {}, 'building_level' : {}, 'recovery_trajectory' : {}, 'breakdowns' : {}, 'partial' : {}}
     
     ## Initial Setup
     num_units = np.size(tenant_unit_recovery_day,1)
@@ -1531,14 +1557,14 @@ def fn_extract_recovery_metrics( tenant_unit_recovery_day,
         
         
     # Determine replacement cases
-    replace_cases = np.logical_not(np.isnan(simulated_replacement))
+    replace_cases = np.logical_not(np.isnan(simulated_replacement_time))
     ''' Post process tenant-level recovery times
       Overwrite NaNs in tenant_unit_day_functional
       Only NaN where never had functional loss, therefore set to zero'''
     tenant_unit_recovery_day[np.isnan(tenant_unit_recovery_day)] = 0
     
     # Overwrite building replacment cases to replacement time
-    tenant_unit_recovery_day[replace_cases,:] = np.array(simulated_replacement)[replace_cases].reshape(len(np.array(simulated_replacement)[replace_cases]),1)* np.ones([1,num_units])   
+    tenant_unit_recovery_day[replace_cases,:] = np.array(simulated_replacement_time)[replace_cases].reshape(len(np.array(simulated_replacement_time)[replace_cases]),1)* np.ones([1,num_units])   
    
     ## Save building-level outputs to occupancy structure
     # Tenant Unit level outputs
@@ -1558,14 +1584,32 @@ def fn_extract_recovery_metrics( tenant_unit_recovery_day,
     # Save specific breakdowns for red tags
     if 'building_safety' in recovery_day.keys():
         red_tag_day = recovery_day['building_safety']['red_tag']
-        red_tag_day[replace_cases] = np.array(simulated_replacement)[replace_cases]
+        red_tag_day[replace_cases] = np.array(simulated_replacement_time)[replace_cases]
         recovery['building_level']['recovery_day_red_tag'] = red_tag_day
 
     
     ## Recovery Trajectory -- calcualte from the tenant breakdowns
     recovery['recovery_trajectory']['recovery_day'] = np.sort(np.column_stack((tenant_unit_recovery_day, tenant_unit_recovery_day)), axis =1)
     recovery['recovery_trajectory']['percent_recovered'] = np.sort(np.concatenate((np.arange(0, (num_units)), np.arange(1, (num_units+1))))) / num_units
-   
+
+    #partial recovery
+    pct_recovered_targets = [0.1, 0.5, 0.8, 1]
+    for i_pct in range(len(pct_recovered_targets)):
+        recovery['partial'][i_pct] = {}
+        pct_recovered = pct_recovered_targets[i_pct]
+        recovery['partial'][i_pct]['pct_recovered'] = pct_recovered
+        recovery['partial'][i_pct]['perform_targ_days'] = perform_targ_days;
+        recovery['partial'][i_pct]['prob_of_target'] = {}
+        for i_targ_day in range(len(perform_targ_days)):
+            targ_day = perform_targ_days[i_targ_day]
+            # get the percentage of tenant units recovered at the given day
+            # pct_recovered_per_real = np.mean(np.sum(tenant_unit_recovery_day <= targ_day, axis=1) / num_units, axis=1);
+            pct_recovered_per_real = np.sum(tenant_unit_recovery_day <= targ_day, axis=1) / num_units
+            recovery['partial'][i_pct]['prob_of_target'][i_targ_day] = np.mean(pct_recovered_per_real < pct_recovered)
+
+
+
+
     ## Format and Save Component-level breakdowns
     # Find the day each ds of each component stops affecting recovery for any story
     

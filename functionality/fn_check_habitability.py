@@ -53,7 +53,7 @@ def fn_check_habitability( damage, damage_consequences, reoc_meta, func_meta,
     reoccupancy = other_functionality_functions.fn_extract_recovery_metrics(day_tenant_unit_reoccupiable, 
                                               recovery_day, comp_breakdowns, 
                                               damage['comp_ds_table']['comp_id'],
-                                              damage_consequences['simulated_replacement'])
+                                              damage_consequences['simulated_replacement_time'])
     
     return reoccupancy
 

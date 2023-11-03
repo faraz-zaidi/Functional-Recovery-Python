@@ -1,6 +1,6 @@
 def main_repair_schedule(damage, building_model, simulated_red_tags, 
                          repair_time_options, systems, tmp_repair_class, 
-                         impeding_factors, simulated_replacement):
+                         impeding_factors, simulated_replacement_time):
     
     '''Determine the repair time for a given damage simulation.
       
@@ -152,8 +152,8 @@ def main_repair_schedule(damage, building_model, simulated_red_tags,
     # Format Start and Stop Time Data for Gantt Chart plots 
     # This is also the main data structure used for calculating full repair time outputs
     building_repair_schedule = {}
-    building_repair_schedule['full'] = other_repair_schedule_functions.fn_format_gantt_chart_data(damage, systems, simulated_replacement)
-    building_repair_schedule['temp'] = other_repair_schedule_functions.fn_format_gantt_chart_data(temporary_damage, systems, simulated_replacement)
+    building_repair_schedule['full'] = other_repair_schedule_functions.fn_format_gantt_chart_data(damage, systems, simulated_replacement_time)
+    building_repair_schedule['temp'] = other_repair_schedule_functions.fn_format_gantt_chart_data(temporary_damage, systems, simulated_replacement_time)
  
     return damage, worker_data, building_repair_schedule
     

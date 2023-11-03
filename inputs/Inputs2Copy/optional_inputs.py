@@ -72,6 +72,7 @@ optional_inputs = {
 "red_tag_clear_time" : 7,
 "red_tag_clear_beta" : 0.6,
 "include_local_stability_impact" : 1,
+"include_flooding_impact": 1,
 "egress_threshold" : 0.5,
 "fire_watch" : True,
 "local_fire_damamge_threshold" : 0.25,
@@ -79,7 +80,6 @@ optional_inputs = {
 "exterior_safety_threshold" : 0.1,
 "interior_safety_threshold" : 0.25,
 "door_access_width_ft" : 9,
-"heat_utility" : 'gas',
 "habitability_requirements": {"electrical" : 0,
                              "water_potable" : 0,
                              "water_sanitary" : 0,
@@ -88,6 +88,8 @@ optional_inputs = {
                              "hvac_cooling" : 0,
                              "hvac_exhaust" : 0                       
                              },
+"water_pressure_max_story" : 4,
+"heat_utility" : 'gas',
                         }
 
                 }

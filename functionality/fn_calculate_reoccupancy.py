@@ -74,7 +74,7 @@ def fn_calculate_reoccupancy(damage, damage_consequences, utilities,
                         np.fmax(recovery_day['building_safety']['entry_door_access'],
                         recovery_day['building_safety']['fire_suppression']))))
     # Check the day each story is accessible
-    day_story_accessible = np.fmax(recovery_day['story_access']['stairs'], np.fmax(recovery_day['story_access']['stair_doors'], recovery_day['story_access']['flooding']))
+    day_story_accessible = np.fmax(recovery_day['story_access']['stairs'], np.fmax(recovery_day['story_access']['stair_doors'], np.fmax(recovery_day['story_access']['flooding'], recovery_day['story_access']['horizontal_egress'])))
     
     # Check the day each tenant unit is safe
     day_tenant_unit_safe = np.fmax(recovery_day['tenant_safety']['interior'], np.fmax(recovery_day['tenant_safety']['exterior'], recovery_day['tenant_safety']['hazardous_material']))
@@ -86,6 +86,6 @@ def fn_calculate_reoccupancy(damage, damage_consequences, utilities,
     reoccupancy = other_functionality_functions.fn_extract_recovery_metrics(day_tenant_unit_reoccupiable, 
                                               recovery_day, comp_breakdowns, 
                                               damage['comp_ds_table']['comp_id'],
-                                              damage_consequences['simulated_replacement'])
+                                              damage_consequences['simulated_replacement_time'])
 
     return reoccupancy, recovery_day, comp_breakdowns

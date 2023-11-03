@@ -154,7 +154,7 @@ def build_input(output_path):
     tenant_units['is_hvac_heating_required'] = np.zeros(len(tenant_units))
     tenant_units['is_hvac_cooling_required'] = np.zeros(len(tenant_units))
     tenant_units['is_hvac_exhaust_required'] = np.zeros(len(tenant_units))
-       
+    tenant_units['is_data_required'] = np.zeros(len(tenant_units))  
     '''Pull default tenant unit attributes for each tenant unit listed in the
     tenant_unit_list'''
     for tu in range(len(tenant_unit_list)):
@@ -177,6 +177,7 @@ def build_input(output_path):
         tenant_units['is_hvac_heating_required'][tu] = tenant_function_requirements['is_hvac_heating_required'][fnc_requirements_filt]
         tenant_units['is_hvac_cooling_required'][tu] = tenant_function_requirements['is_hvac_cooling_required'][fnc_requirements_filt]
         tenant_units['is_hvac_exhaust_required'][tu] = tenant_function_requirements['is_hvac_exhaust_required'][fnc_requirements_filt]
+        tenant_units['is_data_required'][tu] = tenant_function_requirements['is_data_required'][fnc_requirements_filt]    
     '''Pull default component and damage state attributes for each component 
     in the comp_ds_list'''
     
@@ -201,6 +202,7 @@ def build_input(output_path):
                     'int_falling_hazard' : [],
                     'global_hazardous_material' : [],
                     'local_hazardous_material' : [],
+                    'weakens_fire_break' : [],
                     'affects_access' : [],
                     'damages_envelope_seal' : [],
                     'obstructs_interior_space' : [],
@@ -292,6 +294,7 @@ def build_input(output_path):
         comp_ds_info['int_falling_hazard'].append(ds_attr['interior_falling_hazard'][0])
         comp_ds_info['global_hazardous_material'].append(ds_attr['global_hazardous_material'][0])
         comp_ds_info['local_hazardous_material'].append(ds_attr['local_hazardous_material'][0])
+        comp_ds_info['weakens_fire_break'].append(ds_attr['weakens_fire_break'][0])
         comp_ds_info['affects_access'].append(ds_attr['affects_access'][0])
         comp_ds_info['damages_envelope_seal'].append(ds_attr['damages_envelope_seal'][0])
         comp_ds_info['obstructs_interior_space'].append(ds_attr['obstructs_interior_space'][0])

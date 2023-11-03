@@ -774,7 +774,7 @@ def fn_restructure_repair_schedule( damage, system_schedule,
     return damage_recovery
 
 
-def fn_format_gantt_chart_data( damage, systems, simulated_replacement):
+def fn_format_gantt_chart_data( damage, systems, simulated_replacement_time):
     '''Reformat data from the damage structure into data that is used for the
     gantt charts
     
@@ -786,7 +786,7 @@ def fn_format_gantt_chart_data( damage, systems, simulated_replacement):
     systems: DataFrame
      data table containing information about each system's attributes
     
-    simulated_replacement: array [num_reals x 1]
+    simulated_replacement_time: array [num_reals x 1]
      simulated time when the building needs to be replaced, and how long it
      will take (in days). NaN represents no replacement needed (ie
      building will be repaired)
@@ -812,7 +812,7 @@ Returns
     comps = np.unique(damage['comp_ds_table']['comp_id'])
        
     # Determine replacement cases
-    replace_cases = np.logical_not(np.isnan(simulated_replacement))
+    replace_cases = np.logical_not(np.isnan(simulated_replacement_time))
 
     ## Reformat repair schedule data into various breakdowns
     # Per component
@@ -885,7 +885,7 @@ Returns
         repair_schedule['repair_start_day'][formats[f]][replace_cases,:] = 0
         
         format_width = np.size(repair_schedule['repair_complete_day'][formats[f]], 1) # apply replacement time to all comps / systems / stories / etc
-        repair_schedule['repair_complete_day'][formats[f]][replace_cases,:] = np.array(simulated_replacement)[replace_cases].reshape(len(np.array(simulated_replacement)[replace_cases]),1) * np.ones([1,format_width])
+        repair_schedule['repair_complete_day'][formats[f]][replace_cases,:] = np.array(simulated_replacement_time)[replace_cases].reshape(len(np.array(simulated_replacement_time)[replace_cases]),1) * np.ones([1,format_width])
 
     return repair_schedule
 
