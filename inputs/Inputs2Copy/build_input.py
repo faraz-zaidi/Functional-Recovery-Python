@@ -165,7 +165,7 @@ def build_input(output_path):
         tenant_units['exterior'][tu] = tenant_function_requirements['exterior'][fnc_requirements_filt]
         tenant_units['interior'][tu] = tenant_function_requirements['interior'][fnc_requirements_filt]
         tenant_units['occ_per_elev'][tu] = tenant_function_requirements['occ_per_elev'][fnc_requirements_filt]
-        if (tenant_function_requirements['is_elevator_required'][fnc_requirements_filt] == 1)[1]  and (tenant_function_requirements['max_walkable_story'][fnc_requirements_filt] < tenant_units['story'][tu])[1]:
+        if list(tenant_function_requirements['is_elevator_required'][fnc_requirements_filt] == 1)[0]  and list(tenant_function_requirements['max_walkable_story'][fnc_requirements_filt] < tenant_units['story'][tu])[0]:
             tenant_units['is_elevator_required'][tu] = 1
         else:
             tenant_units['is_elevator_required'][tu] = 0
@@ -205,11 +205,14 @@ def build_input(output_path):
                     'weakens_fire_break' : [],
                     'affects_access' : [],
                     'damages_envelope_seal' : [],
+                    'affects_roof_function' : [],
                     'obstructs_interior_space' : [],
                     'impairs_system_operation' : [],
                     'causes_flooding' : [],
-                    'fraction_area_affected' : [],
-                    'area_affected_unit' : [],
+                    'interior_area_factor' : [],
+                    'interior_area_conversion_type' : [],
+                    'exterior_surface_area_factor' : [],
+                    'exterior_falling_length_factor' : [],
                     'crew_size' : [],
                     'permit_type' : [],
                     'redesign' : [],
@@ -297,11 +300,14 @@ def build_input(output_path):
         comp_ds_info['weakens_fire_break'].append(ds_attr['weakens_fire_break'][0])
         comp_ds_info['affects_access'].append(ds_attr['affects_access'][0])
         comp_ds_info['damages_envelope_seal'].append(ds_attr['damages_envelope_seal'][0])
+        comp_ds_info['affects_roof_function'].append(ds_attr['affects_roof_function'][0])
         comp_ds_info['obstructs_interior_space'].append(ds_attr['obstructs_interior_space'][0])
         comp_ds_info['impairs_system_operation'].append(ds_attr['impairs_system_operation'][0])
         comp_ds_info['causes_flooding'].append(ds_attr['causes_flooding'][0])
-        comp_ds_info['fraction_area_affected'].append(ds_attr['fraction_area_affected'][0])
-        comp_ds_info['area_affected_unit'].append(ds_attr['area_affected_unit'][0])
+        comp_ds_info['interior_area_factor'].append(ds_attr['interior_area_factor'][0])
+        comp_ds_info['interior_area_conversion_type'].append(ds_attr['interior_area_conversion_type'][0])    
+        comp_ds_info['exterior_surface_area_factor'].append(ds_attr['exterior_surface_area_factor'][0])
+        comp_ds_info['exterior_falling_length_factor'].append(ds_attr['exterior_falling_length_factor'][0])                
         comp_ds_info['crew_size'].append(ds_attr['crew_size'][0])
         comp_ds_info['permit_type'].append(ds_attr['permit_type'][0])
         comp_ds_info['redesign'].append(ds_attr['redesign'][0])

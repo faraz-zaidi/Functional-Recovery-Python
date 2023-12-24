@@ -38,7 +38,7 @@ def run_analysis(model_name):
     import math
     import pandas as pd
     from scipy.stats import truncnorm
-     
+    
     ## 2. Define User Inputs
     model_dir = 'inputs/example_inputs/'+model_name # Directory where the simulated inputs are located
     outputs_dir = 'outputs/'+model_name # Directory where the assessment outputs are saved
@@ -97,7 +97,7 @@ def run_analysis(model_name):
                                                             repair_time_options,
                                                             functionality, 
                                                             functionality_options)
-            
+           
     # 6. Save Outputs
     # # Define Output path
     if os.path.exists(os.path.join(os.path.dirname(__file__),'outputs')) == False:
@@ -146,7 +146,7 @@ def run_analysis(model_name):
     
     print('Recovery assessment of model ' + model_name + ' complete')
     print('time to run '+str(round(end_time - start_time,2))+'s')
-    
+        
     
 if __name__ == '__main__':
 

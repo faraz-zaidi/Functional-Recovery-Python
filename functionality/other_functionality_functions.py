@@ -139,7 +139,7 @@ def fn_building_safety(damage, building_model, damage_consequences, utilities,
     # Determine the quantity of falling hazard damage and when it will be resolved
     day_repair_fall_haz = np.zeros([num_reals,building_model['num_entry_doors']])
     fall_haz_comps_day_rep = np.zeros([num_reals,num_comps,num_units,building_model['num_entry_doors']])
-    comp_affected_area = np.zeros([num_reals,num_comps,num_units])
+    comp_affected_lf = np.zeros([num_reals,num_comps,num_units])
     scaffold_filt = damage['comp_ds_table']['resolved_by_scaffolding'].astype(bool)
     
     repair_complete_day_w_tmp = np.empty([num_reals,num_comps,num_units])
@@ -168,15 +168,15 @@ def fn_building_safety(damage, building_model, damage_consequences, utilities,
         # Calculate the falling hazards per side
         for tu in range(num_units):
             for side in range(4): # assumes there are 4 sides
-                area_affected_lf_all_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged_side_'+str(side+1)] #FZ# +1 done to account for python indexing starting with 0. 
-    
-                area_affected_sf_all_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged_side_' + str(side+1)]
-    
-                comp_affected_area[:,damage['fnc_filters']['ext_fall_haz_lf'],tu] = area_affected_lf_all_comps[:,damage['fnc_filters']['ext_fall_haz_lf']]
-                comp_affected_area[:,damage['fnc_filters']['ext_fall_haz_sf'],tu] = area_affected_sf_all_comps[:,damage['fnc_filters']['ext_fall_haz_sf']]
-    
-                comp_affected_ft_this_story = comp_affected_area[:,:,tu] / building_model['ht_per_story_ft'][tu]
-                affected_ft_this_story = np.sum(comp_affected_ft_this_story,axis = 1) # Assumes cladding components do not occupy the same perimeter space
+                lf_affected_direct_scale_all_comps = damage['comp_ds_table']['exterior_falling_length_factor'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged_side_' + str(side+1)]  #FZ# +1 done to account for python indexing starting with 0.       
+                lf_affected_sf_all_comps = damage['comp_ds_table']['exterior_falling_length_factor'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged_side_' + str(side+1)] / building_model['ht_per_story_ft'][tu]
+                
+                comp_affected_lf[:,damage['fnc_filters']['ext_fall_haz_lf'],tu] = lf_affected_direct_scale_all_comps[:,damage['fnc_filters']['ext_fall_haz_lf']]
+                comp_affected_lf[:,damage['fnc_filters']['ext_fall_haz_sf'],tu] = lf_affected_sf_all_comps[:,damage['fnc_filters']['ext_fall_haz_sf']]
+                comp_affected_lf[:,damage['fnc_filters']['ext_fall_haz_ea'],tu] = lf_affected_direct_scale_all_comps[:,damage['fnc_filters']['ext_fall_haz_ea']]    
+                
+                comp_affected_ft_this_story = comp_affected_lf[:,:,tu].copy()
+                affected_ft_this_story = np.fmin(np.sum(comp_affected_ft_this_story,axis = 1), edge_lengths[side,tu]) # Assumes cladding components do not occupy the same perimeter space
                 
                 affected_ratio['side_'+str(side+1)][:,tu] = np.fmin((affected_ft_this_story)/ edge_lengths[side,tu],1)
 
@@ -210,9 +210,8 @@ def fn_building_safety(damage, building_model, damage_consequences, utilities,
             day_repair_fall_haz[:,d] = day_repair_fall_haz[:,d] + affects_door * delta_day
     
             # Add days to components that are affecting occupancy
-            comp_posing_falling_hazard = comp_affected_area > 0
-            fall_haz_comps_day_rep[:,:,:,d] = fall_haz_comps_day_rep[:,:,:,d] + ((1 * comp_posing_falling_hazard).transpose(2,0,1) * (affects_door * delta_day).reshape(num_reals,1)).transpose(1,2,0) #FZ# Transpose and reshape done to align nd arrays
-        
+            # fall_haz_comps_day_rep[:,:,:,d] = fall_haz_comps_day_rep[:,:,:,d] + ((1 * comp_posing_falling_hazard).transpose(2,0,1) * (affects_door * delta_day).reshape(num_reals,1)).transpose(1,2,0) #FZ# Transpose and reshape done to align nd arrays
+            fall_haz_comps_day_rep[:,:,:,d] = fall_haz_comps_day_rep[:,:,:,d] + ((comp_affected_lf > 0 * damage['fnc_filters']['ext_fall_haz_all'].reshape(num_comps,1)).transpose(2,0,1) * (affects_door * delta_day).reshape(num_reals,1)).transpose(1,2,0) #FZ# Transpose and reshape done to align nd arrays      
         
         # Change the comps for the next increment
         repair_complete_day_w_tmp = (repair_complete_day_w_tmp.transpose(2,0,1) - delta_day.reshape(num_reals,1)).transpose(1,2,0)
@@ -538,13 +537,13 @@ def fn_tenant_safety( damage, building_model, functionality_options,
         '''#Exterior Enclosure 
            Calculated the affected perimeter area of exterior components
            (assuming all exterior components have either lf or sf units)'''
-        area_affected_all_linear_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_all_area_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_all_linear_comps = damage['comp_ds_table']['exterior_surface_area_factor'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_all_direct_scale_comps = damage['comp_ds_table']['exterior_surface_area_factor'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
         
         # construct a matrix of affected areas from the various damaged component types
         comp_affected_area = np.zeros([num_reals,num_comps])
         comp_affected_area[:,damage['fnc_filters']['exterior_safety_lf']] = area_affected_all_linear_comps[:,damage['fnc_filters']['exterior_safety_lf']]
-        comp_affected_area[:,damage['fnc_filters']['exterior_safety_sf']] = area_affected_all_area_comps[:,damage['fnc_filters']['exterior_safety_sf']]
+        comp_affected_area[:,damage['fnc_filters']['exterior_safety_sf']] = area_affected_all_direct_scale_comps[:,damage['fnc_filters']['exterior_safety_sf']]
         
         '''Go each possible unique repair time contributing to interior safety check
            Find when enough repairs are complete such that interior damage no
@@ -587,16 +586,16 @@ def fn_tenant_safety( damage, building_model, functionality_options,
         
         ## Interior Falling Hazards
         # Convert all component into affected areas
-        area_affected_all_linear_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_all_area_comps   = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_all_bay_comps    = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_all_build_comps  = damage['comp_ds_table']['fraction_area_affected'] * sum(building_model['area_per_story_sf']) * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_all_linear_comps = damage['comp_ds_table']['interior_area_factor'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_all_direct_scale_comps   = damage['comp_ds_table']['interior_area_factor'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_all_bay_comps    = damage['comp_ds_table']['interior_area_factor'] * building_model['struct_bay_area_per_story'][tu] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_all_build_comps  = damage['comp_ds_table']['interior_area_factor'] * sum(building_model['area_per_story_sf']) * damage['tenant_units'][tu]['qnt_damaged']
         
         # Checking damage that affects components in story below
         repair_complete_day_w_tmp_w_instabilities = repair_complete_day_w_tmp
         repair_complete_day_w_tmp_w_instabilities = np.array(repair_complete_day_w_tmp_w_instabilities) #FZ# coverted to array from tuple
         if tu > 0: #FZ# changed to zero to account for python indexing starting from 0.
-            area_affected_below = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu-1] * damage['tenant_units'][tu-1]['qnt_damaged']
+            area_affected_below = damage['comp_ds_table']['interior_area_factor'] * building_model['struct_bay_area_per_story'][tu-1] * damage['tenant_units'][tu-1]['qnt_damaged']
             area_affected_all_bay_comps[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(area_affected_below[:,damage['fnc_filters']['vert_instabilities']], area_affected_all_bay_comps[:,damage['fnc_filters']['vert_instabilities']])
             repair_time_below = damage['tenant_units'][tu-1]['recovery']['repair_complete_day_w_tmp']
             repair_complete_day_w_tmp_w_instabilities[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(repair_time_below[:,damage['fnc_filters']['vert_instabilities']],np.array(repair_complete_day_w_tmp)[:,damage['fnc_filters']['vert_instabilities']])
@@ -605,7 +604,8 @@ def fn_tenant_safety( damage, building_model, functionality_options,
         # construct a matrix of affected areas from the various damaged component types
         comp_affected_area = np.zeros([num_reals,num_comps])
         comp_affected_area[:,damage['fnc_filters']['int_fall_haz_lf']] = area_affected_all_linear_comps[:,damage['fnc_filters']['int_fall_haz_lf']]
-        comp_affected_area[:,damage['fnc_filters']['int_fall_haz_sf']] = area_affected_all_area_comps[:,damage['fnc_filters']['int_fall_haz_sf']]
+        comp_affected_area[:,damage['fnc_filters']['int_fall_haz_sf']] = area_affected_all_direct_scale_comps[:,damage['fnc_filters']['int_fall_haz_sf']]
+        comp_affected_area[:,damage['fnc_filters']['int_fall_haz_ea']] = area_affected_all_direct_scale_comps[:,damage['fnc_filters']['int_fall_haz_ea']]        
         comp_affected_area[:,damage['fnc_filters']['int_fall_haz_bay']] = area_affected_all_bay_comps[:,damage['fnc_filters']['int_fall_haz_bay']]
         comp_affected_area[:,damage['fnc_filters']['int_fall_haz_build']] = area_affected_all_build_comps[:,damage['fnc_filters']['int_fall_haz_build']]
         
@@ -976,9 +976,48 @@ def fn_tenant_function( damage, building_model, system_operation_day,
             comp_breakdowns_all = np.fmax(comp_breakdowns_all,comps_breakdown)
     
         return recovery_day_all, comp_breakdowns_all
-    
     '''Subfunction ends'''
     
+    '''Subfunction'''
+    def check_roof_function(roof_sys_filter, damage_threshold, repair_complete_day_w_tmp, qnt_damaged, num_comps):
+        
+        # Check the roof area for function (seal and function)
+        num_comp_damaged = roof_sys_filter * qnt_damaged
+        num_roof_comps = roof_sys_filter * num_comps
+        
+        comps_day_repaired = repair_complete_day_w_tmp
+        roof_recovery_day = np.zeros(np.shape(repair_complete_day_w_tmp)[0])
+        all_comps_day_roof = np.zeros(np.shape(repair_complete_day_w_tmp))
+        num_repair_time_increments = sum(roof_sys_filter) # possible unique number of loop increments
+        
+        # Loop through each unique repair time increment and determine when stops affecting function
+        for i in range(num_repair_time_increments):
+            # Determine the area of roof affected 
+            percent_area_affected = np.sum(num_comp_damaged, axis = 1) / np.sum(num_roof_comps, axis = 1) # Assumes roof components do not occupy the same area of roof
+        
+            # Determine if current damage affects function for this tenant unit
+            # if the area of exterior wall damage is greater than what is
+            # acceptable by the tenant 
+            affects_function = percent_area_affected >= damage_threshold 
+        
+            # Add days in this increment to the tally
+            delta_day = np.minimum(comps_day_repaired[:, roof_sys_filter],axis = 1)
+            delta_day[np.isnan(delta_day)] = 0
+            roof_recovery_day = roof_recovery_day + affects_function * delta_day
+        
+            # Add days to components that are affecting function
+            any_area_affected_all_comps = num_comp_damaged > 0 # Count any component that contributes to the loss of function regardless of by how much
+            all_comps_day_roof = all_comps_day_roof + any_area_affected_all_comps * affects_function * delta_day
+        
+            # Change the comps for the next increment
+            # reducing damage for what has been repaired in this time increment
+            comps_day_repaired = comps_day_repaired - delta_day
+            comps_day_repaired[comps_day_repaired <= 0] = np.nan
+            fixed_comps_filt = np.isnan(comps_day_repaired)
+            num_comp_damaged[fixed_comps_filt] = 0
+       
+        return all_comps_day_roof, roof_recovery_day
+    '''Subfunction ends'''
     
     ## Initial Setup
     num_units = len(damage['tenant_units'])
@@ -988,6 +1027,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
     recovery_day = {
         'elevators' : np.zeros([num_reals,num_units]),
         'exterior' : np.zeros([num_reals,num_units]),
+        'roof': np.zeros([num_reals,num_units]),
         'interior' : np.zeros([num_reals,num_units]),
         'electrical' : np.zeros([num_reals,num_units]),
         'flooding' : np.zeros([num_reals,num_units]),
@@ -1004,6 +1044,7 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         'elevators' : np.zeros([num_reals,num_comps,num_units]),
         'electrical' : np.zeros([num_reals,num_comps,num_units]),
         'exterior' : np.zeros([num_reals,num_comps,num_units]),
+        'roof' : np.zeros([num_reals,num_comps,num_units]),
         'interior' : np.zeros([num_reals,num_comps,num_units]),
         'flooding' : np.zeros([num_reals,num_comps,num_units]),
         'water_potable' : np.zeros([num_reals,num_comps,num_units]),
@@ -1105,12 +1146,13 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         
         ## Exterior Enclosure 
         # Perimeter Cladding (assuming all exterior components have either lf or sf units)
-        area_affected_lf_all_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_sf_all_comps = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_lf_all_comps = damage['comp_ds_table']['exterior_surface_area_factor'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_direct_scale_all_comps = damage['comp_ds_table']['exterior_surface_area_factor'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
        
         comp_affected_area = np.zeros([num_reals,num_comps])
         comp_affected_area[:,damage['fnc_filters']['exterior_seal_lf']] = area_affected_lf_all_comps[:,damage['fnc_filters']['exterior_seal_lf']]
-        comp_affected_area[:,damage['fnc_filters']['exterior_seal_sf']] = area_affected_sf_all_comps[:,damage['fnc_filters']['exterior_seal_sf']]
+        comp_affected_area[:,damage['fnc_filters']['exterior_seal_sf']] = area_affected_direct_scale_all_comps[:,damage['fnc_filters']['exterior_seal_sf']]
+        comp_affected_area[:,damage['fnc_filters']['exterior_seal_ea']] = area_affected_direct_scale_all_comps[:,damage['fnc_filters']['exterior_seal_ea']]
         
         comps_day_repaired = np.array(repair_complete_day)
         ext_function_recovery_day = np.zeros(num_reals)
@@ -1141,101 +1183,38 @@ def fn_tenant_function( damage, building_model, system_operation_day,
             comps_day_repaired[comps_day_repaired <= 0] = np.nan
             fixed_comps_filt = np.isnan(comps_day_repaired)
             comp_affected_area[fixed_comps_filt] = 0
-        
-        
+            
+        recovery_day['exterior'][:,tu] = ext_function_recovery_day
+        comp_breakdowns['exterior'][:,:,tu] = all_comps_day_ext        
+
         if unit['story'] == num_stories: # If this is the top story, check the roof for function
-            # Roof structure (currently assuming all roofing components have equal unit
-            # areas)
-            damage_threshold = float(subsystems['redundancy_threshold'][subsystems['id'] == 21])
-            num_comp_damaged = damage['fnc_filters']['roof_structure'] * damage['tenant_units'][tu]['qnt_damaged']
-            num_roof_comps = damage['fnc_filters']['roof_structure'] * damage['tenant_units'][tu]['num_comps']
-    
-            comps_day_repaired = np.array(repair_complete_day_w_tmp)
-            roof_structure_recovery_day = np.zeros(num_reals)
-            all_comps_day_roof_struct = np.zeros([num_reals,num_comps])
-            num_repair_time_increments = sum(damage['fnc_filters']['roof_structure']) # possible unique number of loop increments
-            # Loop through each unique repair time increment and determine when stops affecting function
-            for i in range(num_repair_time_increments):
-                # Determine the area of roof affected 
-                percent_area_affected = np.sum(num_comp_damaged, axis=1) / sum(num_roof_comps) # Assumes roof components do not occupy the same area of roof
-                
-                # Determine if current damage affects function for this tenant unit
-                # if the area of exterior wall damage is greater than what is
-                # acceptable by the tenant 
-                affects_function = percent_area_affected >= damage_threshold 
-    
-                # Add days in this increment to the tally
-                delta_day = np.nanmin(comps_day_repaired[:,damage['fnc_filters']['roof_structure']], axis=1)
-                delta_day[np.isnan(delta_day)] = 0
-                roof_structure_recovery_day = roof_structure_recovery_day + affects_function * delta_day
-    
-                # Add days to components that are affecting function
-                any_area_affected_all_comps = num_comp_damaged > 0 # Count any component that contributes to the loss of function regardless of by how much
-                all_comps_day_roof_struct = all_comps_day_roof_struct + any_area_affected_all_comps * affects_function.reshape(num_reals,1) * delta_day.reshape(num_reals,1)
-    
-                # Change the comps for the next increment
-                # reducing damage for what has been repaired in this time increment
-                comps_day_repaired = comps_day_repaired - delta_day.reshape(num_reals,1)
-                comps_day_repaired[comps_day_repaired <= 0] = np.nan
-                fixed_comps_filt = np.isnan(comps_day_repaired)
-                num_comp_damaged[fixed_comps_filt] = 0
-
-    
-            # Roof weatherproofing (currently assuming all roofing components have 
-            # equal unit areas)
-            damage_threshold = float(subsystems['redundancy_threshold'][subsystems['id'] == 22])
-            num_comp_damaged = damage['fnc_filters']['roof_weatherproofing'] * damage['tenant_units'][tu]['qnt_damaged']
-            num_roof_comps = damage['fnc_filters']['roof_weatherproofing'] * damage['tenant_units'][tu]['num_comps']
-    
-            comps_day_repaired = np.array(repair_complete_day_w_tmp)
-            roof_weather_recovery_day = np.zeros(num_reals)
-            all_comps_day_roof_weather = np.zeros([num_reals,num_comps])
-            num_repair_time_increments = sum(damage['fnc_filters']['roof_weatherproofing']) # possible unique number of loop increments
-            # Loop through each unique repair time increment and determine when stops affecting function
-            for i in range(num_repair_time_increments):
-                # Determine the area of roof affected 
-                percent_area_affected = np.sum(num_comp_damaged, axis=1) / sum(num_roof_comps) # Assumes roof components do not occupy the same area of roof
-    
-                # Determine if current damage affects function for this tenant unit
-                # if the area of exterior wall damage is greater than what is
-                # acceptable by the tenant 
-                affects_function = percent_area_affected >= damage_threshold 
-    
-                # Add days in this increment to the tally
-                delta_day = np.nanmin(comps_day_repaired[:,damage['fnc_filters']['roof_weatherproofing']], axis=1)
-                delta_day[np.isnan(delta_day)] = 0
-                roof_weather_recovery_day = roof_weather_recovery_day + affects_function * delta_day
-    
-                # Add days to components that are affecting function
-                any_area_affected_all_comps = num_comp_damaged > 0 # Count any component that contributes to the loss of function regardless of by how much
-                all_comps_day_roof_weather = all_comps_day_roof_weather + any_area_affected_all_comps * affects_function.reshape(num_reals,1) * delta_day.reshape(num_reals,1)
-    
-                # Change the comps for the next increment
-                # reducing damage for what has been repaired in this time increment
-                comps_day_repaired = comps_day_repaired - delta_day
-                comps_day_repaired[comps_day_repaired <= 0] = np.nan
-                fixed_comps_filt = np.isnan(comps_day_repaired)
-                num_comp_damaged[fixed_comps_filt] = 0
-
-    
+            #Roof structure check
+            all_comps_day_roof_struct, roof_structure_recovery_day = check_roof_function(damage['fnc_filters']['roof_structure'],
+                                                                                        subsystems['redundancy_threshold'][subsystems['id'] == 21],
+                                                                                        repair_complete_day_w_tmp,
+                                                                                        damage['tenant_units'][tu]['qnt_damaged'],
+                                                                                        damage['tenant_units'][tu]['num_comps'])
+            
+            # Roof seatherproofing check
+            all_comps_day_roof_weather, roof_weather_recovery_day = check_roof_function(damage['fnc_filters']['roof_weatherproofing'],
+                                                                                        subsystems['redundancy_threshold'][subsystems['id'] == 22],
+                                                                                        repair_complete_day_w_tmp,
+                                                                                        damage['tenant_units'][tu]['qnt_damaged'],
+                                                                                        damage['tenant_units'][tu]['num_comps'])           
+           
             # Combine branches
-            recovery_day['exterior'][:,tu] = np.fmax(ext_function_recovery_day,
-                np.fmax(roof_structure_recovery_day,roof_weather_recovery_day))
-            comp_breakdowns['exterior'][:,:,tu] = np.fmax(all_comps_day_ext,
-                np.fmax(all_comps_day_roof_struct,all_comps_day_roof_weather))
-        else: # this is not the top story so just use the cladding for tenant function
-            recovery_day['exterior'][:,tu] = ext_function_recovery_day
-            comp_breakdowns['exterior'][:,:,tu] = all_comps_day_ext
+            recovery_day['roof'][:,tu] = np.fmax(roof_structure_recovery_day, roof_weather_recovery_day)
+            comp_breakdowns['roof'][:,:,tu] = np.fmax(all_comps_day_roof_struct, all_comps_day_roof_weather)
         
         ## Interior Area
-        area_affected_lf_all_comps    = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_sf_all_comps    = damage['comp_ds_table']['fraction_area_affected'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_bay_all_comps   = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu] * damage['tenant_units'][tu]['qnt_damaged']
-        area_affected_build_all_comps = damage['comp_ds_table']['fraction_area_affected'] * sum(building_model['area_per_story_sf']) * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_lf_all_comps    = damage['comp_ds_table']['interior_area_factor'] * damage['comp_ds_table']['unit_qty'] * building_model['ht_per_story_ft'][tu] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_direct_scale_all_comps    = damage['comp_ds_table']['interior_area_factor'] * damage['comp_ds_table']['unit_qty'] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_bay_all_comps   = damage['comp_ds_table']['interior_area_factor'] * building_model['struct_bay_area_per_story'][tu] * damage['tenant_units'][tu]['qnt_damaged']
+        area_affected_build_all_comps = damage['comp_ds_table']['interior_area_factor'] * sum(building_model['area_per_story_sf']) * damage['tenant_units'][tu]['qnt_damaged']
         
         repair_complete_day_w_tmp_w_instabilities = np.array(repair_complete_day_w_tmp)
         if tu > 0: #FZ# changed to 0 to account for python index starting from 0.
-            area_affected_below = damage['comp_ds_table']['fraction_area_affected'] * building_model['struct_bay_area_per_story'][tu-1] * damage['tenant_units'][tu-1]['qnt_damaged']
+            area_affected_below = damage['comp_ds_table']['interior_area_factor'] * building_model['struct_bay_area_per_story'][tu-1] * damage['tenant_units'][tu-1]['qnt_damaged']
             area_affected_bay_all_comps[:,damage['fnc_filters']['vert_instabilities']] = np.fmax(
                 area_affected_below[:,damage['fnc_filters']['vert_instabilities']],area_affected_bay_all_comps[:,damage['fnc_filters']['vert_instabilities']])
             repair_time_below = damage['tenant_units'][tu-1]['recovery']['repair_complete_day_w_tmp']
@@ -1245,7 +1224,8 @@ def fn_tenant_function( damage, building_model, system_operation_day,
     
         comp_affected_area = np.zeros([num_reals,num_comps])
         comp_affected_area[:,damage['fnc_filters']['interior_function_lf']] = area_affected_lf_all_comps[:,damage['fnc_filters']['interior_function_lf']]
-        comp_affected_area[:,damage['fnc_filters']['interior_function_sf']] = area_affected_sf_all_comps[:,damage['fnc_filters']['interior_function_sf']]
+        comp_affected_area[:,damage['fnc_filters']['interior_function_sf']] = area_affected_direct_scale_all_comps[:,damage['fnc_filters']['interior_function_sf']]
+        comp_affected_area[:,damage['fnc_filters']['interior_function_ea']] = area_affected_direct_scale_all_comps[:,damage['fnc_filters']['interior_function_ea']]        
         comp_affected_area[:,damage['fnc_filters']['interior_function_bay']] = area_affected_bay_all_comps[:,damage['fnc_filters']['interior_function_bay']]
         comp_affected_area[:,damage['fnc_filters']['interior_function_build']] = area_affected_build_all_comps[:,damage['fnc_filters']['interior_function_build']]
     
@@ -1593,20 +1573,32 @@ def fn_extract_recovery_metrics( tenant_unit_recovery_day,
     recovery['recovery_trajectory']['percent_recovered'] = np.sort(np.concatenate((np.arange(0, (num_units)), np.arange(1, (num_units+1))))) / num_units
 
     #partial recovery
-    pct_recovered_targets = [0.1, 0.5, 0.8, 1]
+    pct_recovered_targets = [0.1, 0.5, 0.75, 0.8, 1]
+    
+    # order the tennant recovery days so it's easier to see at what time the required numnber of units
+    # are required
+    ordered_tenant_repair_days = np.sort(tenant_unit_recovery_day, axis = 1)
+    
     for i_pct in range(len(pct_recovered_targets)):
         recovery['partial'][i_pct] = {}
-        pct_recovered = pct_recovered_targets[i_pct]
-        recovery['partial'][i_pct]['pct_recovered'] = pct_recovered
-        recovery['partial'][i_pct]['perform_targ_days'] = perform_targ_days;
+        target_recovery_ratio_units = pct_recovered_targets[i_pct]
+        recovery['partial'][i_pct]['target_recovery_ratio_units'] = target_recovery_ratio_units
+        recovery['partial'][i_pct]['target_recovery_day'] = perform_targ_days;
         recovery['partial'][i_pct]['prob_of_target'] = {}
         for i_targ_day in range(len(perform_targ_days)):
             targ_day = perform_targ_days[i_targ_day]
             # get the percentage of tenant units recovered at the given day
             # pct_recovered_per_real = np.mean(np.sum(tenant_unit_recovery_day <= targ_day, axis=1) / num_units, axis=1);
             pct_recovered_per_real = np.sum(tenant_unit_recovery_day <= targ_day, axis=1) / num_units
-            recovery['partial'][i_pct]['prob_of_target'][i_targ_day] = np.mean(pct_recovered_per_real < pct_recovered)
-
+            recovery['partial'][i_pct]['prob_of_target'][i_targ_day] = np.mean(pct_recovered_per_real < target_recovery_ratio_units)
+           
+            # how many units need to be repaired to meet the percent required 
+            reqd_units = int(np.ceil(num_units * target_recovery_ratio_units))
+            recovery['partial'][i_pct]['reqd_units'] = reqd_units
+            recovery['partial'][i_pct]['mean'] = np.mean(ordered_tenant_repair_days[:, reqd_units-1]) #FZ reqd_units - 1 because pytho indexing start from zero.
+            recovery['partial'][i_pct]['median'] = np.percentile(ordered_tenant_repair_days[:, reqd_units-1], 50)
+            recovery['partial'][i_pct]['fractile_75'] = np.percentile(ordered_tenant_repair_days[:, reqd_units-1], 75)
+            recovery['partial'][i_pct]['fractile_90'] = np.percentile(ordered_tenant_repair_days[:, reqd_units-1], 90)
 
 
 

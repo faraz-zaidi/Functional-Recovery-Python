@@ -47,13 +47,13 @@ def fn_simulate_damage_per_side(damage):
         
         # Randomly split damage between 4 sides
         # (this will only matter for cladding components)
-        ratio_damage_per_side = np.random.rand([num_reals,4]) # assumes square footprint
-        ratio_damage_per_side = ratio_damage_per_side / np.sum(ratio_damage_per_side, axis=1) # force it to add to one
+        ratio_damage_per_side = np.random.rand(num_reals,4) # assumes square footprint
+        ratio_damage_per_side = ratio_damage_per_side / np.sum(ratio_damage_per_side, axis=1).reshape(num_reals,1) # force it to add to one
     
         # Assing damage
         for tu in range(len(damage['tenant_units'])):
             for s in range(4):
-                damage['tenant_units'][tu]['qnt_damaged_side_' +str(s+1)] = ratio_damage_per_side[:,s]*damage['tenant_units'][tu]['qnt_damaged']
+                damage['tenant_units'][tu]['qnt_damaged_side_' +str(s+1)] = ratio_damage_per_side[:,s].reshape(num_reals, 1) * np.array(damage['tenant_units'][tu]['qnt_damaged'])
                 
     return damage
 
@@ -79,11 +79,6 @@ def fn_create_fnc_filters(comp_ds_table):
       simulated damage arrays.'''
 
 
-
-    
-
-    
-    
     # Convert damage['comp_ds_table'] lists to numpy arrays
     import numpy as np    
     
@@ -143,32 +138,36 @@ def fn_create_fnc_filters(comp_ds_table):
     
     # Exterior Falling hazards
     fnc_filters['ext_fall_haz_lf'] = np.logical_and(comp_ds_table['unit'] =='lf', comp_ds_table['ext_falling_hazard'] == 1) # Components with perimeter linear feet units
-    fnc_filters['ext_fall_haz_sf'] = np.logical_and(comp_ds_table['unit'] == 'sf', comp_ds_table['ext_falling_hazard'] == 1) # Components with perimeter square feet units
-    fnc_filters['ext_fall_haz_all'] = fnc_filters['ext_fall_haz_lf'] | fnc_filters['ext_fall_haz_sf']
+    fnc_filters['ext_fall_haz_sf'] = np.logical_and(comp_ds_table['unit'] == 'sf', comp_ds_table['ext_falling_hazard'] == 1) # Components with square feet units
+    fnc_filters['ext_fall_haz_ea'] = np.logical_and(comp_ds_table['unit'] == 'each', comp_ds_table['ext_falling_hazard'] == 1) # Components with "each" units
+    fnc_filters['ext_fall_haz_all'] = fnc_filters['ext_fall_haz_lf'] | fnc_filters['ext_fall_haz_sf'] | fnc_filters['ext_fall_haz_ea']
     
     # Exterior enclosure envelope seal damage
     fnc_filters['exterior_seal_lf'] = np.logical_and(comp_ds_table['unit'] == 'lf', comp_ds_table['damages_envelope_seal'] == 1) # Components with perimeter linear feet units
     fnc_filters['exterior_seal_sf'] = np.logical_and(comp_ds_table['unit'] == 'sf', comp_ds_table['damages_envelope_seal'] == 1) # Components with perimeter square feet units
-    fnc_filters['exterior_seal_all'] = fnc_filters['exterior_seal_lf'] | fnc_filters['exterior_seal_sf']
+    fnc_filters['exterior_seal_ea'] = np.logical_and(comp_ds_table['unit'] == 'each', comp_ds_table['damages_envelope_seal'] == 1) # Components with perimeter each units    
+    fnc_filters['exterior_seal_all'] = fnc_filters['exterior_seal_lf'] | fnc_filters['exterior_seal_sf'] | fnc_filters['exterior_seal_ea']
     
     # Roofing components
-    fnc_filters['roof_structure'] = np.logical_and(comp_ds_table['subsystem_id'] == 21, comp_ds_table['damages_envelope_seal'] == 1)
-    fnc_filters['roof_weatherproofing'] = np.logical_and(comp_ds_table['subsystem_id'] == 22, comp_ds_table['damages_envelope_seal'] == 1)
+    fnc_filters['roof_structure'] = np.logical_and(comp_ds_table['subsystem_id'] == 21, comp_ds_table['affects_roof_function'] == 1)
+    fnc_filters['roof_weatherproofing'] = np.logical_and(comp_ds_table['subsystem_id'] == 22, comp_ds_table['affects_roof_function'] == 1)
     
     # Interior falling hazards
-    fnc_filters['int_fall_haz_lf'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, comp_ds_table['unit'] == 'lf') # Interior components with perimeter feet units
-    fnc_filters['int_fall_haz_sf'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, np.logical_or(comp_ds_table['unit'] == 'sf', comp_ds_table['unit'] == 'each')) # Interior components with area feet units (or each, which is just lights, which we take care of with the fraction affected area, which is probably not the best way to do it)
-    fnc_filters['int_fall_haz_bay'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, comp_ds_table['area_affected_unit'] == 'bay') # structural damage that does not cause red tags but affects function
-    fnc_filters['int_fall_haz_build'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, comp_ds_table['area_affected_unit'] == 'building') # structural damage that does not cause red tags but affects funciton (this one should only be tilt-ups)
-    fnc_filters['int_fall_haz_all'] = fnc_filters['int_fall_haz_lf'] | fnc_filters['int_fall_haz_sf'] | fnc_filters['int_fall_haz_bay'] | fnc_filters['int_fall_haz_build'] 
-    fnc_filters['vert_instabilities'] = np.logical_and(comp_ds_table['system'] == 1, comp_ds_table['int_falling_hazard'] == 1) # Flag structural damage that causes interior falling hazards
+    fnc_filters['int_fall_haz_lf'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, np.logical_and(comp_ds_table['unit'] == 'lf', comp_ds_table['interior_area_conversion_type'] == 'component')) # Interior components with perimeter feet units
+    fnc_filters['int_fall_haz_sf'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, np.logical_and(comp_ds_table['unit'] == 'sf', comp_ds_table['interior_area_conversion_type'] == 'component')) # Interior components with area feet units
+    fnc_filters['int_fall_haz_ea'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, np.logical_and(comp_ds_table['unit'] == 'each', comp_ds_table['interior_area_conversion_type'] == 'component')) # Interior components with "each" for units (just scale directly)    
+    fnc_filters['int_fall_haz_bay'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, comp_ds_table['interior_area_conversion_type'] == 'bay') # structural damage that does not cause red tags but affects function
+    fnc_filters['int_fall_haz_build'] = np.logical_and(comp_ds_table['int_falling_hazard'] == 1, comp_ds_table['interior_area_conversion_type'] == 'building') # structural damage that does not cause red tags but affects funciton (this one should only be tilt-ups)
+    fnc_filters['int_fall_haz_all'] = fnc_filters['int_fall_haz_lf'] | fnc_filters['int_fall_haz_sf'] | fnc_filters['int_fall_haz_ea'] | fnc_filters['int_fall_haz_bay'] | fnc_filters['int_fall_haz_build'] 
+    fnc_filters['vert_instabilities'] = np.logical_and(comp_ds_table['system'] == 1, comp_ds_table['int_falling_hazard'] == 1)
     
     # Interior function damage 
-    fnc_filters['interior_function_lf'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, comp_ds_table['unit'] == 'lf'); 
-    fnc_filters['interior_function_sf'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, np.logical_or(comp_ds_table['unit'] == 'sf', comp_ds_table['unit'] == 'each')) 
-    fnc_filters['interior_function_bay'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, comp_ds_table['area_affected_unit'] == 'bay')
-    fnc_filters['interior_function_build'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, comp_ds_table['area_affected_unit'] == 'building')  
-    fnc_filters['interior_function_all'] = fnc_filters['interior_function_lf'] | fnc_filters['interior_function_sf'] | fnc_filters['interior_function_bay'] | fnc_filters['interior_function_build'] 
+    fnc_filters['interior_function_lf'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, np.logical_and(comp_ds_table['unit'] == 'lf', comp_ds_table['interior_area_conversion_type'] == 'component')) 
+    fnc_filters['interior_function_sf'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, np.logical_and(comp_ds_table['unit'] == 'sf', comp_ds_table['interior_area_conversion_type'] == 'component')) 
+    fnc_filters['interior_function_ea'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, np.logical_and(comp_ds_table['unit'] == 'each', comp_ds_table['interior_area_conversion_type'] == 'component'))     
+    fnc_filters['interior_function_bay'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, comp_ds_table['interior_area_conversion_type'] == 'bay')
+    fnc_filters['interior_function_build'] = np.logical_and(comp_ds_table['obstructs_interior_space'] == 1, comp_ds_table['interior_area_conversion_type'] == 'building')  
+    fnc_filters['interior_function_all'] = fnc_filters['interior_function_lf'] | fnc_filters['interior_function_sf'] | fnc_filters['interior_function_ea'] | fnc_filters['interior_function_bay'] | fnc_filters['interior_function_build'] 
     
     # Elevators
     fnc_filters['elevators'] = np.logical_and(comp_ds_table['system'] == 5, np.logical_and(comp_ds_table['impairs_system_operation'], comp_ds_table['subsystem_id'] != 2))
@@ -294,12 +293,15 @@ def fn_simulate_temp_worker_days(damage, temp_repair_class, repair_time_options)
             if damage['comp_ds_table']['tmp_repair_class'][c] > 0: # For damage that has temporary repair
                 filt = np.array(damage['comp_ds_table']['comp_id']) == damage['comp_ds_table']['comp_id'][c]
                 total_damaged_all_ds = np.sum(total_damaged[:,filt], axis=1)
-        
+            
+                if float(damage['comp_ds_table']['tmp_repair_time_lower_qnty'][c]) == float(damage['comp_ds_table']['tmp_repair_time_upper_qnty'][c]):
+                    tmp_worker_days_per_unit[:,c] = damage['comp_ds_table']['tmp_repair_time_lower'][c]
+                else:
                 # Interpolate to get per unit temp repair times
-                tmp_worker_days_per_unit[:,c] = np.interp(np.minimum(np.maximum(total_damaged_all_ds, float(damage['comp_ds_table']['tmp_repair_time_lower_qnty'][c])), float(damage['comp_ds_table']['tmp_repair_time_upper_qnty'][c])),
-                            np.array([float(damage['comp_ds_table']['tmp_repair_time_lower_qnty'][c]), float(damage['comp_ds_table']['tmp_repair_time_upper_qnty'][c])]),
-                            np.array([damage['comp_ds_table']['tmp_repair_time_lower'][c], damage['comp_ds_table']['tmp_repair_time_upper'][c]]),
-                            )
+                    tmp_worker_days_per_unit[:,c] = np.interp(np.minimum(np.maximum(total_damaged_all_ds, float(damage['comp_ds_table']['tmp_repair_time_lower_qnty'][c])), float(damage['comp_ds_table']['tmp_repair_time_upper_qnty'][c])),
+                                np.array([float(damage['comp_ds_table']['tmp_repair_time_lower_qnty'][c]), float(damage['comp_ds_table']['tmp_repair_time_upper_qnty'][c])]),
+                                np.array([damage['comp_ds_table']['tmp_repair_time_lower'][c], damage['comp_ds_table']['tmp_repair_time_upper'][c]]),
+                                )
             else:
                 tmp_worker_days_per_unit[:,c] = np.nan
 
@@ -342,13 +344,13 @@ def fn_define_door_racking(damage_consequences, num_stories):
     
     # Assume there are no racked doors if not specified by the user
     if ('racked_stair_doors_per_story' in damage_consequences.keys()) == False:
-        damage_consequences['racked_stair_doors_per_story'] = list(np.zeros([num_reals,num_stories])) #num real x num stories
+        damage_consequences['racked_stair_doors_per_story'] = (np.zeros([num_reals,num_stories])).tolist() #num real x num stories
 
     if ('racked_entry_doors_side_1' in damage_consequences.keys()) == False:
-        damage_consequences['racked_entry_doors_side_1'] = list(np.zeros(num_reals)) # array, num real x num stories #FZ num_reals x 1?
+        damage_consequences['racked_entry_doors_side_1'] = list(np.zeros(num_reals)) 
 
     if ('racked_entry_doors_side_2' in damage_consequences.keys()) == False:
-        damage_consequences['racked_entry_doors_side_2'] = list(np.zeros(num_reals)); # array, num real x num stories #FZ num_reals x 1?
+        damage_consequences['racked_entry_doors_side_2'] = list(np.zeros(num_reals))
     
     return damage_consequences
 

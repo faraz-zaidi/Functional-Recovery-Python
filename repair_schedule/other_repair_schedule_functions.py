@@ -196,7 +196,7 @@ def fn_calc_system_repair_time(damage, repair_type, systems, max_workers_per_bui
         sequence_filt = np.array(damage['comp_ds_table'][system_var]) == sys # identifies which ds indices are in this seqeunce.
         comp_types = np.unique(np.array(damage['comp_ds_table']['comp_idx'])[sequence_filt]) # Types of components in this system
         
-        # Pre-allocatate variables
+        # Pre-allocate variables
         total_worker_days = np.zeros([num_reals,num_stories])
         is_damaged_building = np.zeros([num_reals,num_comps], dtype=bool)
         num_damaged_comp_types = np.zeros([num_reals,num_stories])
@@ -205,15 +205,15 @@ def fn_calc_system_repair_time(damage, repair_type, systems, max_workers_per_bui
         
         for s in range(num_stories):
             # Define damage properties of this system at this story
-            num_damaged_units[:,s] = np.sum((1*sequence_filt) * damage['tenant_units'][s]['qnt_damaged'], axis=1) #FZ# Total number of damaged components of one system in one storey
-            is_damaged = np.logical_and(np.array(damage['tenant_units'][s]['qnt_damaged']) > 0, np.array(damage['tenant_units'][s][repair_time_var]) > 0) #FZ# checking for which components in which realizations are damaged
+            num_damaged_units[:,s] = np.sum((1*sequence_filt) * damage['tenant_units'][s]['qnt_damaged'], axis=1) #FZ# Total number of damaged components of one system in one story
+            is_damaged = np.logical_and(np.array(damage['tenant_units'][s]['qnt_damaged']) > 0, np.array(damage['tenant_units'][s][repair_time_var]) > 0) #FZ# No
             is_damaged_building = is_damaged_building | is_damaged              #FZ# compiling for all stories. if there is damage at any story, building is damaged
             
             for c in range(len(comp_types)):
-                num_damaged_comp_types[:,s] = num_damaged_comp_types[:,s] + np.any((1* np.array(damage['comp_ds_table']['comp_idx']) == comp_types[c]) * (1*is_damaged), axis=1) #FZ# number of types of components damaged in a storey in each realization
+                num_damaged_comp_types[:,s] = num_damaged_comp_types[:,s] + np.any((1* np.array(damage['comp_ds_table']['comp_idx']) == comp_types[c]) * (1*is_damaged), axis=1) #FZ# number of types of components damaged in a story in each realization
             
         
-            # Caluculate total worker days per story per sequences
+            # Calculate total worker days per story per sequences
             total_worker_days[:,s] = np.sum(np.array(damage['tenant_units'][s][repair_time_var])[:,sequence_filt], axis=1) # perhaps consider doing when we first set up this damage data structure
             
             # Determine the required crew size needed for  these repairs
@@ -254,7 +254,7 @@ def fn_calc_system_repair_time(damage, repair_type, systems, max_workers_per_bui
             
         return total_worker_days, num_workers, average_crew_size, max_crews_building
     
-    # General Varaible
+    # General Variable
     num_reals = len(damage['tenant_units'][0]['worker_days'])
     schedule = {'system_totals' : {'repair_days' : np.zeros([num_reals,len(systems)])}}
     schedule['system_totals']['num_workers'] = np.zeros([num_reals,len(systems)])

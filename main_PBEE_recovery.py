@@ -99,3 +99,4 @@ def main_PBEE_recovery(damage, damage_consequences, building_model,
                                 functionality['impeding_factors']['temp_repair'])
     
     return functionality, damage_consequences
+
