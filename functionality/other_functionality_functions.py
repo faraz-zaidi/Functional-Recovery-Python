@@ -980,42 +980,41 @@ def fn_tenant_function( damage, building_model, system_operation_day,
     
     '''Subfunction'''
     def check_roof_function(roof_sys_filter, damage_threshold, repair_complete_day_w_tmp, qnt_damaged, num_comps):
-        
+
         # Check the roof area for function (seal and function)
         num_comp_damaged = roof_sys_filter * qnt_damaged
         num_roof_comps = roof_sys_filter * num_comps
         
-        comps_day_repaired = repair_complete_day_w_tmp
-        roof_recovery_day = np.zeros(np.shape(repair_complete_day_w_tmp)[0])
-        all_comps_day_roof = np.zeros(np.shape(repair_complete_day_w_tmp))
+        comps_day_repaired = np.array(repair_complete_day_w_tmp)
+        roof_recovery_day = np.zeros(np.shape(comps_day_repaired)[0])
+        all_comps_day_roof = np.zeros(np.shape(comps_day_repaired))
         num_repair_time_increments = sum(roof_sys_filter) # possible unique number of loop increments
-        
+
         # Loop through each unique repair time increment and determine when stops affecting function
         for i in range(num_repair_time_increments):
             # Determine the area of roof affected 
-            percent_area_affected = np.sum(num_comp_damaged, axis = 1) / np.sum(num_roof_comps, axis = 1) # Assumes roof components do not occupy the same area of roof
-        
+            percent_area_affected = np.sum(num_comp_damaged, axis = 1) / sum(num_roof_comps) # Assumes roof components do not occupy the same area of roof            
             # Determine if current damage affects function for this tenant unit
             # if the area of exterior wall damage is greater than what is
             # acceptable by the tenant 
-            affects_function = percent_area_affected >= damage_threshold 
-        
+            affects_function = percent_area_affected >= damage_threshold
+
             # Add days in this increment to the tally
-            delta_day = np.minimum(comps_day_repaired[:, roof_sys_filter],axis = 1)
+            delta_day = np.nanmin(comps_day_repaired[:, roof_sys_filter],axis = 1)
             delta_day[np.isnan(delta_day)] = 0
             roof_recovery_day = roof_recovery_day + affects_function * delta_day
-        
+
             # Add days to components that are affecting function
             any_area_affected_all_comps = num_comp_damaged > 0 # Count any component that contributes to the loss of function regardless of by how much
-            all_comps_day_roof = all_comps_day_roof + any_area_affected_all_comps * affects_function * delta_day
-        
+            all_comps_day_roof = all_comps_day_roof + any_area_affected_all_comps * (affects_function * delta_day).reshape(len(delta_day),1)
+
             # Change the comps for the next increment
             # reducing damage for what has been repaired in this time increment
-            comps_day_repaired = comps_day_repaired - delta_day
+            comps_day_repaired = comps_day_repaired - delta_day.reshape(len(delta_day),1)
             comps_day_repaired[comps_day_repaired <= 0] = np.nan
             fixed_comps_filt = np.isnan(comps_day_repaired)
             num_comp_damaged[fixed_comps_filt] = 0
-       
+
         return all_comps_day_roof, roof_recovery_day
     '''Subfunction ends'''
     
@@ -1190,14 +1189,14 @@ def fn_tenant_function( damage, building_model, system_operation_day,
         if unit['story'] == num_stories: # If this is the top story, check the roof for function
             #Roof structure check
             all_comps_day_roof_struct, roof_structure_recovery_day = check_roof_function(damage['fnc_filters']['roof_structure'],
-                                                                                        subsystems['redundancy_threshold'][subsystems['id'] == 21],
+                                                                                        np.array(subsystems['redundancy_threshold'][subsystems['id'] == 21])[0],
                                                                                         repair_complete_day_w_tmp,
                                                                                         damage['tenant_units'][tu]['qnt_damaged'],
                                                                                         damage['tenant_units'][tu]['num_comps'])
             
             # Roof seatherproofing check
             all_comps_day_roof_weather, roof_weather_recovery_day = check_roof_function(damage['fnc_filters']['roof_weatherproofing'],
-                                                                                        subsystems['redundancy_threshold'][subsystems['id'] == 22],
+                                                                                        np.array(subsystems['redundancy_threshold'][subsystems['id'] == 22])[0],
                                                                                         repair_complete_day_w_tmp,
                                                                                         damage['tenant_units'][tu]['qnt_damaged'],
                                                                                         damage['tenant_units'][tu]['num_comps'])           
