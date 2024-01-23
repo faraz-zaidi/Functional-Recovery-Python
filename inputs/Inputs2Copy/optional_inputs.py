@@ -30,7 +30,7 @@ optional_inputs = {
                             "is_essential_facility" : False,
                             "is_borp_equivalent" : False,
                             "is_engineer_on_retainer" : False,
-                            "contractor_relationship" : 'good',
+                            "contractor_relationship" : 'none',
                             "contractor_retainer_time" : 3,
                             "funding_source" : 'private',
                             "capital_available_ratio" : 0.02
@@ -74,7 +74,7 @@ optional_inputs = {
 "include_local_stability_impact" : 1,
 "include_flooding_impact": 1,
 "egress_threshold" : 0.5,
-"fire_watch" : True,
+"fire_watch" : False,
 "local_fire_damamge_threshold" : 0.25,
 "min_egress_paths" : 2,
 "exterior_safety_threshold" : 0.1,
